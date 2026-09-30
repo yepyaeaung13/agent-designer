@@ -1,0 +1,205 @@
+.document-switcher {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-weight: 600;
+  max-width: 400px;
+}
+.document-switcher > span:first-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pages-heading {
+  align-items: center;
+  padding-top: 20px;
+}
+.pages-heading button {
+  font-size: 20px;
+  padding: 0 5px;
+  line-height: 24px;
+  color: #7561e8;
+}
+.page-list {
+  max-height: 220px;
+  overflow: auto;
+  padding: 0 10px;
+  flex-shrink: 0;
+}
+.page-item {
+  border-radius: 6px;
+  color: #81808f;
+  margin-bottom: 3px;
+}
+.page-item.active {
+  background: #f1eeff;
+  color: #6e5bd1;
+}
+.page-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 10px;
+  font-size: 12px;
+}
+.page-select > span:nth-child(2) {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-select small {
+  font-size: 10px;
+  opacity: 0.6;
+}
+.page-actions {
+  display: flex;
+  padding: 5px 13px 0;
+  gap: 6px;
+}
+.page-actions button {
+  font-size: 10px;
+  color: #9592a4;
+  padding: 5px 7px;
+}
+.workspace-dialog {
+  border: 1px solid #e6e3ef;
+  border-radius: 16px;
+  padding: 28px;
+  color: #34323f;
+  box-shadow: 0 24px 100px #25203d30;
+  max-height: 85vh;
+  overflow: auto;
+}
+.workspace-dialog::backdrop {
+  background: #24203866;
+}
+.workspace-dialog h2 {
+  font-size: 20px;
+  letter-spacing: -0.5px;
+  margin: 0 0 8px;
+}
+.workspace-dialog p {
+  font-size: 12px;
+  color: #8e889b;
+  line-height: 1.8;
+}
+.library-dialog {
+  width: 560px;
+}
+.eyebrow {
+  color: #a6a0b4;
+  font-size: 9px;
+  letter-spacing: 1.6px;
+  margin-bottom: 10px;
+}
+.library-intro {
+  margin: 8px 0 24px;
+}
+.document-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+.document-card {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  padding: 14px;
+  gap: 15px;
+  border: 1px solid #eeecf3;
+  flex-shrink: 0;
+}
+.document-card.active {
+  background: #f8f6ff;
+  border-color: #dcd5fa;
+}
+.document-thumbnail {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: #ece8fb;
+  color: #9484cf;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+}
+.document-card-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.document-card-label strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+}
+.document-card small {
+  font-size: 10px;
+  color: #9993a7;
+}
+.document-card > .muted {
+  font-size: 10px;
+}
+.library-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 24px;
+  border-top: 1px solid #eeeaf5;
+  padding-top: 16px;
+}
+.library-actions button {
+  font-size: 11px;
+}
+.library-actions .primary {
+  margin: 0;
+  margin-right: auto;
+}
+.danger-text {
+  color: #b77380;
+}
+.name-dialog {
+  width: 400px;
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+}
+.form-actions .primary {
+  margin: 0;
+}
+.danger {
+  background: #ae5667;
+  color: white;
+  padding: 11px 16px;
+}
+.danger:hover {
+  background: #964657;
+}
+.name-dialog input {
+  margin: 4px 0;
+}
+.name-dialog strong {
+  overflow-wrap: anywhere;
+  color: #61576c;
+}
+.layer-list:empty::after {
+  content: 'No layers yet. Add a frame to begin.';
+  display: block;
+  padding: 12px 18px;
+  color: #aaa5b8;
+  font-size: 11px;
+  line-height: 1.8;
+}

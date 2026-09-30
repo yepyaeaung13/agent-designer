@@ -1,0 +1,74 @@
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.import-button {
+  border: 1px solid #dedbe9;
+  color: #7561e8;
+  font-size: 12px;
+  padding: 9px 13px;
+}
+.import-dialog {
+  width: 530px;
+}
+.import-dialog p {
+  line-height: 1.7;
+}
+.import-dialog code {
+  font-size: 11px;
+  background: #f1eef8;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.figma-reference-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #faf8ff;
+  border-bottom: 1px solid #e9e4f4;
+  color: #76618d;
+  font-size: 11px;
+}
+.figma-reference-bar button {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+.reference-dialog {
+  width: min(1200px, 92vw);
+  height: 85vh;
+}
+.reference-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 24px;
+  height: calc(100% - 80px);
+}
+.reference-image {
+  overflow: auto;
+  background: #eeeaf3;
+  padding: 12px;
+  border-radius: 8px;
+}
+.reference-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.reference-columns aside {
+  overflow: auto;
+}
+.reference-columns li {
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 0 0 12px;
+  color: #8a8098;
+}
+.reference-columns h3 {
+  font-size: 12px;
+}
+.reference-columns ul {
+  padding-left: 16px;
+}

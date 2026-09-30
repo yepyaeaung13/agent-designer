@@ -1,0 +1,56 @@
+{
+  "name": "agent-designer",
+  "productName": "agent-designer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "My Electron application description",
+  "keywords": [],
+  "license": "MIT",
+  "author": {
+    "name": "Ye Pyae Aung",
+    "email": "yepyaeaung@owaytrip.com"
+  },
+  "main": ".vite/build/main.cjs",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "release": "electron-forge release",
+    "lint": "oxlint && oxfmt --check",
+    "lint:fix": "oxlint --fix && oxfmt --write",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test.cjs",
+    "rebuild": "electron-rebuild -f -w better-sqlite3"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^8.0.1",
+    "@electron-forge/maker-deb": "^8.0.1",
+    "@electron-forge/maker-rpm": "^8.0.1",
+    "@electron-forge/maker-squirrel": "^8.0.1",
+    "@electron-forge/maker-zip": "^8.0.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^8.0.1",
+    "@electron-forge/plugin-fuses": "^8.0.1",
+    "@electron-forge/plugin-vite": "^8.0.1",
+    "@electron/fuses": "^2.1.3",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/electron-squirrel-startup": "^1.0.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "electron": "44.5.0",
+    "oxfmt": "^0.41.0",
+    "oxlint": "^1.86.0",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.1"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "better-sqlite3": "^13.0.3",
+    "electron-squirrel-startup": "^1.0.1",
+    "konva": "^10.7.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-konva": "^19.3.0",
+    "zod": "^4.6.5"
+  }
+}

@@ -1,0 +1,488 @@
+:root {
+  font-family: Inter, 'Segoe UI', Arial, sans-serif;
+  color: #242632;
+  background: #f8f9fb;
+  font-synthesis: none;
+  font-size: 13px;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+textarea {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+button:hover {
+  background: #eeedf4;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #7561e8;
+  outline-offset: 2px;
+}
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.topbar {
+  height: 64px;
+  flex-shrink: 0;
+  background: white;
+  border-bottom: 1px solid #e9e9ef;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 22px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  letter-spacing: -0.5px;
+}
+.brand strong span {
+  font-weight: 400;
+  color: #858695;
+}
+.brand-mark {
+  background: #7561e8;
+  color: white;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  width: 30px;
+  height: 30px;
+  font-size: 25px;
+  font-weight: 700;
+}
+.document-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 500;
+}
+.local-badge {
+  font-size: 9px;
+  letter-spacing: 1px;
+  background: #f0eff5;
+  color: #8a859d;
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+.agent-button {
+  border: 1px solid #dedbe9;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 13px;
+  font-size: 12px;
+}
+.dot {
+  width: 6px;
+  height: 6px;
+  display: inline-block;
+  border-radius: 50%;
+  background: #aaaaaa;
+}
+.dot.online {
+  background: #57a98c;
+}
+.workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.sidebar {
+  background: white;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.left {
+  width: 224px;
+  border-right: 1px solid #e9e9ef;
+}
+.right {
+  width: 264px;
+  border-left: 1px solid #e9e9ef;
+  overflow: auto;
+}
+.section-title {
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  font-weight: 600;
+  color: #9295a3;
+  display: flex;
+  justify-content: space-between;
+  padding: 26px 18px 14px;
+}
+.section-title span {
+  letter-spacing: 0;
+  color: #b1b3bf;
+}
+.page-row {
+  padding: 12px 20px;
+  color: #6e5bd1;
+  background: #f6f4ff;
+  margin: 0 10px;
+  border-radius: 6px;
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+}
+.layers-heading {
+  margin-top: 20px;
+  border-top: 1px solid #f1f1f5;
+}
+.layer-list {
+  flex: 1;
+  overflow: auto;
+}
+.layer-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  text-align: left;
+  border-radius: 0;
+  gap: 10px;
+  min-height: 38px;
+  font-size: 12px;
+}
+.layer-row.active {
+  background: #eeeaff;
+  color: #6e5bd1;
+}
+.layer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.node-icon {
+  font-size: 17px;
+  color: #9290a4;
+  min-width: 18px;
+}
+.sidebar-footer {
+  padding: 18px;
+  border-top: 1px solid #eeeef3;
+  color: #8b8c99;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.canvas-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.toolbar {
+  height: 58px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 4px;
+  border-bottom: 1px solid #e9e9ef;
+  flex-shrink: 0;
+}
+.tool-group {
+  display: flex;
+  gap: 3px;
+}
+.tool {
+  font-size: 20px;
+  width: 36px;
+  height: 36px;
+  padding: 4px;
+}
+.tool.selected {
+  background: #eeebff;
+  color: #7561e8;
+}
+.divider {
+  height: 22px;
+  width: 1px;
+  background: #e9e9ef;
+  margin: 0 9px;
+}
+.toolbar-spacer {
+  flex: 1;
+}
+.canvas-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  background-color: #f3f4f8;
+  background-image: radial-gradient(#d9dbe6 0.7px, transparent 0.7px);
+  background-size: 16px 16px;
+}
+.canvas-viewport.hand {
+  cursor: grab;
+}
+.canvas-hint {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background: #ffffffdc;
+  border: 1px solid #e7e7ee;
+  border-radius: 20px;
+  padding: 8px 15px;
+  white-space: nowrap;
+  font-size: 10px;
+  color: #8d8d9c;
+}
+.canvas-hint span {
+  padding: 0 7px;
+}
+.statusbar {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 10px;
+  color: #9293a1;
+  background: white;
+  border-top: 1px solid #e9e9ef;
+}
+.inspector-tabs {
+  height: 58px;
+  border-bottom: 1px solid #ededf3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  font-size: 12px;
+}
+.inspector-tabs span {
+  color: #a3a1af;
+  font-size: 10px;
+}
+.inspector {
+  padding: 22px 18px;
+}
+.selection-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.inspector h3 {
+  font-size: 11px;
+  font-weight: 600;
+  padding-top: 20px;
+  margin-top: 22px;
+  border-top: 1px solid #efeff4;
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 11px;
+  color: #9393a2;
+  margin: 12px 0;
+}
+input:not([type='checkbox']):not([type='color']),
+textarea {
+  width: 100%;
+  border: 1px solid #ececf1;
+  border-radius: 5px;
+  background: #f9f9fb;
+  color: #454553;
+  padding: 9px 10px;
+  min-width: 0;
+}
+textarea {
+  resize: vertical;
+  min-height: 85px;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+.field-grid label {
+  text-transform: capitalize;
+}
+.color-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  border: 1px solid #ececf1;
+  border-radius: 5px;
+  padding: 6px;
+  color: #666575;
+}
+.color-row input {
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.toggles {
+  display: flex;
+  gap: 24px;
+  margin-top: 22px;
+}
+.toggles label {
+  flex-direction: row;
+  align-items: center;
+  color: #787887;
+}
+input[type='checkbox'] {
+  accent-color: #7561e8;
+}
+.delete-button {
+  width: 100%;
+  margin-top: 24px;
+  color: #b26c75;
+  border: 1px solid #eedfe1;
+  font-size: 12px;
+}
+.empty-inspector {
+  padding: 48px 24px;
+  color: #8e8e9e;
+}
+.empty-icon {
+  background: #f4f2fc;
+  color: #988bd7;
+  border-radius: 14px;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  margin-bottom: 22px;
+}
+.empty-inspector h3 {
+  font-size: 13px;
+  color: #626272;
+  font-weight: 500;
+}
+.empty-inspector p {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.tip {
+  font-size: 11px;
+  line-height: 1.9;
+  border-top: 1px solid #eeeef4;
+  padding-top: 24px;
+  margin-top: 28px;
+  color: #b1afbe;
+}
+.error {
+  background: #fff0ef;
+  color: #9c413f;
+  padding: 10px 14px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.muted {
+  color: #9693a4;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #1f1c3c55;
+  display: grid;
+  place-items: center;
+  z-index: 10;
+}
+.modal {
+  width: 500px;
+  background: white;
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0 25px 100px #15132a33;
+}
+.modal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.5px;
+}
+.modal p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #868292;
+}
+.primary {
+  background: #7561e8;
+  color: white;
+  padding: 11px 15px;
+  margin-top: 12px;
+}
+.primary:hover {
+  background: #6551d8;
+}
+/* Keep detailed property controls consistent with numeric fields. */
+.inspector select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #e5e2ed;
+  border-radius: 6px;
+  background: white;
+  color: inherit;
+  font: inherit;
+}
+.property-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #817a92;
+}
+.canvas-viewport.right-panning,
+.canvas-viewport.right-panning * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+.effect-summary {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #e5e2ed;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.effect-summary > div {
+  margin-top: 8px;
+}
+.effect-summary button {
+  margin-top: 6px;
+  color: #6544d6;
+  text-align: left;
+}

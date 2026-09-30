@@ -1,0 +1,169 @@
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  color: #e6e7ee;
+  background: #16171d;
+  --surface: #202127;
+  --surface-raised: #292a33;
+  --line: #363743;
+  --muted: #a3a4b5;
+  --accent: #b3a3ff;
+  scrollbar-color: #515260 #202127;
+}
+[data-theme='dark'] .app {
+  background: #16171d;
+}
+[data-theme='dark']
+  :is(.topbar, .sidebar, .toolbar, .statusbar, .modal, .workspace-dialog) {
+  background: var(--surface);
+  color: #e6e7ee;
+}
+[data-theme='dark']
+  :is(
+    .topbar,
+    .sidebar,
+    .toolbar,
+    .statusbar,
+    .inspector-tabs,
+    .inspector h3,
+    .layer-list,
+    .sidebar-footer,
+    .library-actions,
+    .color-row,
+    .effect-summary,
+    .document-card,
+    .agent-button,
+    .import-button,
+    .workspace-dialog,
+    .delete-button
+  ) {
+  border-color: var(--line);
+}
+[data-theme='dark'] button:hover {
+  background: #30313d;
+}
+[data-theme='dark']
+  :is(
+    .brand strong span,
+    .section-heading,
+    .section-heading span,
+    .node-icon,
+    .muted,
+    .sidebar-footer,
+    .statusbar,
+    .inspector-tabs span,
+    .inspector label,
+    .toggles label,
+    .empty-inspector,
+    .empty-inspector p,
+    .empty-inspector h3,
+    .property-note,
+    .modal p,
+    .workspace-dialog p,
+    .page-item,
+    .page-actions button,
+    .eyebrow,
+    .document-card small,
+    .reference-columns li,
+    .layer-list:empty::after
+  ) {
+  color: var(--muted);
+}
+[data-theme='dark']
+  :is(
+    .page-item.active,
+    .layer-row.active,
+    .tool.selected,
+    .page-row,
+    .document-card.active
+  ) {
+  background: #36304e;
+  color: #c1b4ff;
+}
+[data-theme='dark']
+  :is(.import-button, .pages-heading button, .effect-summary button) {
+  color: var(--accent);
+}
+[data-theme='dark']
+  :is(
+    .local-badge,
+    .document-thumbnail,
+    .empty-inspector .empty-icon,
+    .import-dialog code
+  ) {
+  background: #32303f;
+  color: #beb1eb;
+}
+[data-theme='dark'] .divider {
+  background: var(--line);
+}
+[data-theme='dark'] .canvas-viewport {
+  background-color: #16171d;
+  background-image: radial-gradient(#363845 0.7px, transparent 0.7px);
+}
+[data-theme='dark'] .canvas-hint {
+  background: #24252eed;
+  color: #b5b5c6;
+  border-color: var(--line);
+}
+[data-theme='dark']
+  :is(
+    input:not([type='checkbox']):not([type='color']),
+    textarea,
+    .inspector select
+  ) {
+  color: #e6e7ee;
+  background: #292a33;
+  border-color: #41424e;
+}
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder {
+  color: #9091a3;
+}
+[data-theme='dark'] .color-row {
+  color: #d7d6e3;
+}
+[data-theme='dark'] :is(.danger-text, .delete-button) {
+  color: #ffadb8;
+}
+[data-theme='dark'] .error {
+  background: #49262e;
+  color: #ffc4cc;
+}
+[data-theme='dark'] .figma-reference-bar {
+  background: #272333;
+  color: #c1b1e0;
+  border-color: var(--line);
+}
+[data-theme='dark'] .reference-image {
+  background: #16171d;
+}
+[data-theme='dark'] .name-dialog strong {
+  color: #e0d9ef;
+}
+[data-theme='dark'] .primary,
+[data-theme='dark'] .brand-mark {
+  background: #8063ed;
+  color: #ffffff;
+}
+[data-theme='dark'] .primary:hover {
+  background: #947af4;
+}
+[data-theme='dark'] .danger {
+  background: #a6445b;
+  color: #ffffff;
+}
+[data-theme='dark'] .danger:hover {
+  background: #bb536c;
+}
+[data-theme='dark'] .workspace-dialog::backdrop,
+[data-theme='dark'] .modal-backdrop {
+  background: #08090caa;
+}
+.theme-toggle {
+  white-space: nowrap;
+}
+
+[data-theme='dark'] .layers-heading,
+[data-theme='dark'] .tip {
+  border-color: var(--line);
+}

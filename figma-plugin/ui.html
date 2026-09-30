@@ -1,0 +1,127 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        font: 14px system-ui;
+        padding: 18px;
+        color: #262333;
+      }
+      h2 {
+        font-size: 18px;
+      }
+      p {
+        line-height: 1.5;
+      }
+      button,
+      a {
+        background: #6544d6;
+        color: white;
+        border: 0;
+        border-radius: 6px;
+        padding: 10px 14px;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      button:disabled {
+        opacity: 0.5;
+      }
+      #status {
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Export to Agent Designer</h2>
+    <p>
+      Select one frame. Export its layers, images, and reference, then import
+      the file in Agent Designer.
+    </p>
+    <button id="export">Export selected frame</button>
+    <p>
+      <label
+        ><input id="compact" type="checkbox" /> Compact preview for complex
+        pages</label
+      >
+    </p>
+    <a id="download" hidden>Save export</a>
+    <p id="status" role="status">No token required.</p>
+    <script>
+      const button = document.getElementById('export');
+      const download = document.getElementById('download');
+      const status = document.getElementById('status');
+      let objectUrl;
+      // Correlation only; no secure-context browser APIs are needed.
+      const sessionId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      let requestSequence = 0;
+      let requestId;
+      let watchdog;
+      function watch(milliseconds, text) {
+        clearTimeout(watchdog);
+        watchdog = setTimeout(() => {
+          status.textContent = text;
+          requestId = undefined;
+          button.disabled = false;
+        }, milliseconds);
+      }
+      button.onclick = () => {
+        button.disabled = true;
+        download.hidden = true;
+        status.textContent = 'Preparing export…';
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        requestId = `${sessionId}-${++requestSequence}`;
+        watch(
+          10000,
+          'The plugin did not respond. Close this window and run Agent Designer Export again to load the updated plugin.',
+        );
+        parent.postMessage(
+          {
+            pluginMessage: {
+              type: 'export',
+              requestId,
+              compactPreview: document.getElementById('compact').checked,
+            },
+          },
+          '*',
+        );
+      };
+      window.onmessage = (event) => {
+        // Figma's desktop bridge does not guarantee event.source === parent.
+        const message = event.data && event.data.pluginMessage;
+        if (!message || !requestId || message.requestId !== requestId) return;
+        if (!['ready', 'error', 'progress'].includes(message.type)) return;
+        clearTimeout(watchdog);
+        if (message.type === 'ready') {
+          if (
+            typeof message.json !== 'string' ||
+            typeof message.name !== 'string'
+          )
+            return;
+          objectUrl = URL.createObjectURL(
+            new Blob([message.json], { type: 'application/json' }),
+          );
+          download.href = objectUrl;
+          download.download =
+            (message.name.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80) ||
+              'design') + '.agentdesign.json';
+          download.hidden = false;
+          button.disabled = false;
+          status.textContent = `${message.summary || 'Ready'}. Save the export, then choose “Import export file” in Agent Designer.`;
+          requestId = undefined;
+        } else if (message.type === 'error' || message.type === 'progress') {
+          status.textContent = message.text;
+          if (message.type === 'error') {
+            button.disabled = false;
+            requestId = undefined;
+          } else {
+            watch(
+              75000,
+              'Figma stopped responding during export. Close and reopen the plugin, then try a smaller frame.',
+            );
+          }
+        }
+      };
+    </script>
+  </body>
+</html>
