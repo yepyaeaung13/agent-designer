@@ -1,3 +1,4 @@
+import type { FontImport, LocalFont } from './fonts';
 import { z } from 'zod';
 
 export const nodeSchema = z
@@ -199,6 +200,15 @@ export type ConnectionInfo = {
   error?: string;
 };
 export interface DesignerApi {
+  listFonts(): Promise<LocalFont[]>;
+  fontData(id: string): Promise<string>;
+  importFont(input: FontImport): Promise<LocalFont | null>;
+  removeFont(id: string): Promise<void>;
+  saveExport(input: {
+    name: string;
+    format: 'png' | 'svg';
+    data: string;
+  }): Promise<boolean>;
   copyText(text: string): Promise<void>;
   importFigma(input: { url: string; token: string }): Promise<Snapshot>;
   importBundle(): Promise<Snapshot | null>;

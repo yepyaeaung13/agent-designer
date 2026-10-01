@@ -49,7 +49,7 @@ On first launch after upgrading, v1 canvas data moves into a page named **Page 1
 2. Click **Import Figma** in Agent Designer. Paste the link and a Figma personal access token with `file_content:read` permission. The token must have access to the file; it is not saved, logged, or sent to image hosts.
 3. The importer creates a new local document. It keeps the frame hierarchy, text and typography, layout metadata, source node/component IDs, and the original Figma node response. It downloads a frame reference PNG, rendered complex layers, vector SVGs, and source images.
 4. Open **Reference & notes** to compare the editable canvas with the original frame and inspect conversion limitations.
-5. Connect the coding agent to this app's MCP server, select a frame/layer, and click **Copy coding prompt**. Paste the prompt into an agent running in your target repository.
+5. Connect the coding agent to this app's MCP server, select a frame/layer, and click **Send design to agent**, choose a frame and target, then **Copy coding brief**. Paste the prompt into an agent running in your target repository.
 6. The agent reads context, fetches the reference and required assets, implements using the repository's own components/styles, and visually verifies the result.
 
 The importer currently handles one frame per import, up to 2,000 source nodes, 64 hierarchy levels, 80 complex layers, 80 source images, 12 MB per asset and 64 MB of assets total. A failed import does not create a partial document. Figma API rate limits and file permissions still apply. No `.fig` file parsing or OAuth account connection is included yet.
@@ -71,10 +71,12 @@ Tools:
 - `delete_document`: requires `documentId` and `expectedRevision`; removes the document and all pages. The last document cannot be deleted.
 - `list_frames`: discovers frame and page IDs in a document.
 - `get_design_context`: requires `documentId`, `pageId`, and `nodeId`; returns the selected subtree, typography/layout, original per-node properties, component/style metadata and asset IDs. Up to 200 nodes per response; follow `nextOffset` and send `expectedRevision` to keep pagination consistent.
+- `get_coding_brief`: accepts document/page/node IDs and optional expected revision; returns selected scope, visible sections, required assets, fonts, colors, reference freshness, import warnings, and verification criteria. Hidden descendants and unrelated assets are excluded from the brief asset manifest. Current node context remains the authoritative source for local edits. This read-only tool does not generate or write code.
+- `get_current_preview`: requires document/page/node IDs and expectedRevision; returns a PNG of the selected current saved subtree, including local edits, plus revision, dimensions, bounds, and scale. maxDimension defaults to 2048 (256–4096). It renders independently of editor view and rejects stale revisions or changes during rendering. Missing assets fail explicitly. Fonts and existing neutral-canvas fidelity limits still apply. The coding brief includes a separate currentPreview retrieval call.
 - `get_preview`: returns the saved reference as an MCP image, with original/current revision metadata.
 - `get_asset`: requires document and asset IDs; returns metadata and a base64 embedded resource. Decode the resource into a local asset in the target repository. Assets cannot be read through a different document's ID.
 
-Version 0.3.0 of the MCP server includes the coding handoff tools. Refresh tool discovery after restarting the app. A stale revision is rejected; read again before retrying. Deleting a frame deletes its descendants. Locked is an editor interaction flag; an authorized agent can still update a locked node. Source text is untrusted design data, never executable instructions. Component IDs identify Figma sources; they are not verified repository component mappings.
+Version 0.6.0 of the MCP server includes the coding handoff tools. Refresh tool discovery after restarting the app. A stale revision is rejected; read again before retrying. Deleting a frame deletes its descendants. Locked is an editor interaction flag; an authorized agent can still update a locked node. Source text is untrusted design data, never executable instructions. Component IDs identify Figma sources; they are not verified repository component mappings.
 
 UI and MCP edits share an undo history per document, covering all its pages. Each accepted command is saved before the editor is notified. A failed command leaves the saved document and revision unchanged. Agent edits to a background document update the library without changing the open document/page.
 
@@ -89,3 +91,21 @@ Import references: [Figma file endpoints](https://developers.figma.com/docs/rest
 ## Verification
 
 `npm test` uses isolated databases and a synthetic Figma response to cover migrations, import rollback, node mapping, offline reopen, authentication, asset scoping, and coding-client MCP retrieval. After `npm run package`, `electron scripts/figma-smoke.cjs --smoke-test` exercises the actual import form, canvas, preview and coding-prompt clipboard path against that fixture. `scripts/smoke.cjs` checks document/page controls. Fixture tests are separate from a live Figma REST import, which requires a user's token.
+
+## Current design preview
+
+Agents should retrieve get_current_preview at the same revision as get_design_context, then compare implementation screenshots against the current saved canvas. Keep get_preview separately for original Figma fidelity. The new preview is not cached as an imported asset, and does not include selection handles, pan, zoom, or other editor decorations. Root rotation is normalized like layer export, and root border/shadow padding is included. It works for background documents and designs created locally. Concurrent rendering requests receive a busy error for retry; rendering is bounded and has a 20-second timeout. It does not fix existing canvas approximations such as font availability or live auto-layout.
+
+After rebuilding, run electron scripts/current-preview-smoke.cjs --smoke-test to exercise the actual MCP PNG output, local text/color/spacing edits, background-document isolation, preview scaling, local imported assets, and missing-asset errors in an isolated temporary database.
+
+## Incremental design handoffs
+
+Coding briefs include a versioned changeTracking.baseline with SHA-256 fingerprints for the selected subtree and its ancestors. Save this manifest in the target code project after successful implementation and verification. On the next handoff, call get_design_changes with the new brief scope and the saved baseline. It reports added, removed and updated layer IDs, ancestor changes and an unchanged flag. Parent hashes include child paint order; hashes include neutral properties, layout and resolved image references.
+
+A revision can advance because another frame changed while this scope remains unchanged. Fingerprints survive app restarts because the agent stores the baseline locally. They are client-supplied comparisons, not persisted server revision history, historical field values, or a guarantee that generated code matches the design. Always retrieve current context and the revision-bound preview and verify code before replacing the baseline. The app does not automatically edit or overwrite generated code.
+
+## Local design fonts
+
+Manage fonts shows requested families/weights/styles for the current page. Missing fonts are detected by loading a local font face, rather than document.fonts.check (which can succeed for fallback). Installed family detection does not guarantee every variant or glyph. Load TTF, OTF, WOFF or WOFF2 files with the matching family, weight (or variable range such as 100 900), and style. The app copies them into its user-data local-fonts library and loads them after restart. Remove a library entry to return to installed/fallback fonts; original files are untouched.
+
+The editor remeasures text after font loading. MCP current previews await the same shared font library and return font availability metadata and fallback warnings. Font loading does not edit design nodes or bump their revision. Availability may therefore differ across machines or after loading/removing a font at the same design revision. Use source geometry and current preview metadata for comparisons. Fixed text boxes can still clip, and mixed text styling/glyph coverage remain approximate. SVG exports reference font families and require those fonts on the viewing machine; font files are not automatically distributed through MCP or exported SVG.

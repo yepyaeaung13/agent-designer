@@ -1,12 +1,15 @@
+import { FontStore } from './main/font-store';
+import { fontRequestSchema } from './shared/fonts';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, net } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { DocumentService } from './main/document-service';
 import { startMcp } from './main/mcp';
+import type { PreviewRenderer } from './main/current-preview';
 import type { ConnectionInfo } from './shared/design';
 import { FigmaImporter } from './main/figma-import';
 import { z } from 'zod';
-import { open } from 'node:fs/promises';
+import { open, writeFile } from 'node:fs/promises';
 import { bundleLimit, importFigmaBundle } from './main/figma-bundle';
 
 let service: DocumentService | undefined;
@@ -29,13 +32,46 @@ else {
         'designer.sqlite',
       );
       service = new DocumentService(databasePath);
+      let fonts: FontStore | undefined;
+      let fontError = '';
+      try {
+        fonts = new FontStore(app.getPath('userData'));
+      } catch {
+        fontError =
+          'The local font library could not be read. Your design is intact.';
+      }
+      const fontLibrary = () => {
+        if (!fonts) throw new Error(fontError);
+        return fonts;
+      };
+      let loadingFont = false;
       const importer = new FigmaImporter(service, (url, options) =>
         net.fetch(String(url), options),
       );
       let importing = false;
       let connection: ConnectionInfo;
+      let previewBusy = false;
+      const renderPreview: PreviewRenderer = async (input) => {
+        const window = BrowserWindow.getAllWindows().find(
+          (window) => !window.isDestroyed(),
+        );
+        if (!window || window.webContents.isLoadingMainFrame())
+          throw new Error(
+            'Preview renderer is not ready. Try again after the editor loads.',
+          );
+        if (previewBusy)
+          throw new Error('Preview renderer is busy. Try again shortly.');
+        previewBusy = true;
+        try {
+          return await window.webContents.executeJavaScript(
+            `window.__renderCurrentPreview(${JSON.stringify(input)})`,
+          );
+        } finally {
+          previewBusy = false;
+        }
+      };
       try {
-        mcp = await startMcp(service);
+        mcp = await startMcp(service, 0, renderPreview);
         connection = { url: mcp.url, token: mcp.token, databasePath };
       } catch (error) {
         connection = {
@@ -50,13 +86,131 @@ else {
         if (!window || event.senderFrame !== window.webContents.mainFrame)
           throw new Error('Untrusted sender');
       };
+      ipcMain.handle('fonts:list', (event) => {
+        trusted(event);
+        return fontLibrary().list();
+      });
+      ipcMain.handle('fonts:data', (event, id: unknown) => {
+        trusted(event);
+        return fontLibrary().data(id);
+      });
+      ipcMain.handle('fonts:remove', (event, id: unknown) => {
+        trusted(event);
+        fontLibrary().remove(id);
+      });
+      ipcMain.handle('fonts:import', async (event, input: unknown) => {
+        trusted(event);
+        const request = fontRequestSchema.parse(input);
+        if (loadingFont) throw new Error('Another font is being loaded.');
+        loadingFont = true;
+        try {
+          const selected = await dialog.showOpenDialog(
+            BrowserWindow.fromWebContents(event.sender)!,
+            {
+              title: 'Load a local font file',
+              properties: ['openFile'],
+              filters: [
+                {
+                  name: 'Font files',
+                  extensions: ['ttf', 'otf', 'woff', 'woff2'],
+                },
+              ],
+            },
+          );
+          if (selected.canceled || !selected.filePaths.length) return null;
+          const file = await open(selected.filePaths[0], 'r');
+          try {
+            const info = await file.stat();
+            if (
+              !info.isFile() ||
+              info.size < 12 ||
+              info.size > 20 * 1024 * 1024
+            )
+              throw new Error('Choose a font file smaller than 20 MB.');
+            const bytes = Buffer.alloc(info.size + 1);
+            let size = 0;
+            while (size < bytes.length) {
+              const read = await file.read(
+                bytes,
+                size,
+                bytes.length - size,
+                null,
+              );
+              if (!read.bytesRead) break;
+              size += read.bytesRead;
+            }
+            if (size !== info.size)
+              throw new Error(
+                'The font file changed while loading. Try again.',
+              );
+            return fontLibrary().import(request, bytes.subarray(0, size));
+          } finally {
+            await file.close();
+          }
+        } finally {
+          loadingFont = false;
+        }
+      });
       ipcMain.handle('design:read', (event) => {
         trusted(event);
         return service!.read();
       });
-      ipcMain.handle('design:copy-text', (event, text: unknown) => {
+      ipcMain.handle('design:save-export', async (event, input: unknown) => {
         trusted(event);
-        return clipboard.writeText(z.string().max(20000).parse(text));
+        const value = z
+          .object({
+            name: z.string().min(1).max(160),
+            format: z.enum(['png', 'svg']),
+            data: z.string().max(90 * 1024 * 1024),
+          })
+          .strict()
+          .parse(input);
+        const bytes =
+          value.format === 'png'
+            ? Buffer.from(value.data, 'base64')
+            : Buffer.from(value.data, 'utf8');
+        if (bytes.length > 64 * 1024 * 1024)
+          throw new Error('Export exceeds 64 MB. Try a lower scale.');
+        if (
+          value.format === 'png' &&
+          !bytes
+            .subarray(0, 8)
+            .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+        )
+          throw new Error('Invalid PNG export.');
+        if (value.format === 'svg' && !value.data.startsWith('<svg '))
+          throw new Error('Invalid SVG export.');
+        const name =
+          value.name
+            // Windows filenames cannot contain control characters.
+            // eslint-disable-next-line no-control-regex
+            .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+            .replace(/[. ]+$/, '') || 'layer';
+        const result = await dialog.showSaveDialog(
+          BrowserWindow.fromWebContents(event.sender)!,
+          {
+            title: 'Export layer',
+            defaultPath: path.join(
+              app.getPath('downloads'),
+              `${name}.${value.format}`,
+            ),
+            filters: [
+              { name: value.format.toUpperCase(), extensions: [value.format] },
+            ],
+          },
+        );
+        if (result.canceled || !result.filePath) return false;
+        await writeFile(result.filePath, bytes);
+        return true;
+      });
+      ipcMain.handle('design:copy-text', async (event, text: unknown) => {
+        trusted(event);
+        const value = z.string().max(20000).parse(text);
+        await clipboard.writeText(value);
+        if ((await clipboard.readText()) !== value)
+          throw new Error(
+            'Could not confirm the clipboard copy. Please try again.',
+          );
       });
       ipcMain.handle('design:import-figma', async (event, input: unknown) => {
         trusted(event);

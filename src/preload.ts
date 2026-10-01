@@ -2,6 +2,11 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { DesignerApi, Snapshot } from './shared/design';
 
 const api: DesignerApi = {
+  listFonts: () => ipcRenderer.invoke('fonts:list'),
+  fontData: (id) => ipcRenderer.invoke('fonts:data', id),
+  importFont: (input) => ipcRenderer.invoke('fonts:import', input),
+  removeFont: (id) => ipcRenderer.invoke('fonts:remove', id),
+  saveExport: (input) => ipcRenderer.invoke('design:save-export', input),
   copyText: (text) => ipcRenderer.invoke('design:copy-text', text),
   importFigma: (input) => ipcRenderer.invoke('design:import-figma', input),
   importBundle: () => ipcRenderer.invoke('design:import-bundle'),

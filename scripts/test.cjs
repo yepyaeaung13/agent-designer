@@ -9,6 +9,11 @@ const result = spawnSync(
     'tests/document.test.ts',
     'tests/figma.test.ts',
     'tests/bundle.test.ts',
+    'tests/spacing.test.ts',
+    'tests/coding-brief.test.ts',
+    'tests/current-preview.test.ts',
+    'tests/design-changes.test.ts',
+    'tests/fonts.test.ts',
   ],
   {
     stdio: 'inherit',

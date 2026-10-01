@@ -1,0 +1,62 @@
+.font-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--surface, #fff);
+  border-bottom: 1px solid var(--line, #e4e4eb);
+  font-size: 12px;
+}
+.font-dialog {
+  width: min(650px, 90vw);
+  max-height: 85vh;
+  overflow: auto;
+}
+.font-list {
+  max-height: 230px;
+  overflow: auto;
+  margin: 16px 0;
+}
+.font-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line, #e4e4eb);
+  font-size: 12px;
+}
+.font-row > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.font-row small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted, #777);
+}
+.font-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.font-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.font-dialog input,
+.font-dialog select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px;
+}
+.font-dialog p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.font-error {
+  color: #d64e59;
+}

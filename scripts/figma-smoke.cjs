@@ -38,18 +38,35 @@ app.on('browser-window-created', (_event, window) => {
         document.querySelector('.figma-reference-bar button').click();
         await waitFor(() => document.querySelector('.reference-image img')?.naturalWidth > 0, 'Saved preview failed to decode');
         document.querySelector('[aria-label="Close reference"]').click();
-        document.querySelectorAll('.figma-reference-bar button')[1].click();
-        await waitFor(() => document.querySelectorAll('.figma-reference-bar button')[1].textContent.includes('copied'), 'Coding prompt did not copy');
+        document.querySelector('.coding-handoff-bar button').click();
+        await waitFor(() => document.querySelector('.coding-handoff-dialog[open]'), 'Coding handoff did not open');
+        const target = document.querySelectorAll('.coding-handoff-dialog select')[1];
+        target.value = 'react-demo'; target.dispatchEvent(new Event('change', {bubbles:true}));
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        document.querySelector('.coding-handoff-dialog .primary').click();
+        await waitFor(() => document.querySelector('.coding-handoff-dialog .primary').textContent.includes('copied'), 'Coding prompt did not copy');
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         return { importUI: true, tokenCleared: true, layers: 6, previewDecoded: true, codingPrompt: true };
       })()`);
+      await new Promise((resolve) => setTimeout(resolve, 200));
       const prompt = await clipboard.readText();
       if (
+        !prompt.includes('get_coding_brief') ||
         !prompt.includes('expectedRevision') ||
         !prompt.includes('get_asset') ||
+        !prompt.includes('separate responsive React demo') ||
         prompt.includes('fixture-token')
       )
-        throw new Error('Invalid coding handoff prompt');
+        throw new Error(
+          'Invalid coding handoff prompt: ' +
+            JSON.stringify({
+              length: prompt.length,
+              brief: prompt.includes('get_coding_brief'),
+              revision: prompt.includes('expectedRevision'),
+              assets: prompt.includes('get_asset'),
+              fixtureCredential: prompt.includes('fixture-token'),
+            }),
+        );
       const directory = path.join(__dirname, '..', '.artifacts');
       mkdirSync(directory, { recursive: true });
       writeFileSync(

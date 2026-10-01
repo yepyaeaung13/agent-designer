@@ -195,7 +195,6 @@ export function FigmaImportButton({
 
 export function FigmaReference({
   snapshot,
-  selection,
 }: {
   snapshot?: Snapshot;
   selection: string | null;
@@ -203,37 +202,20 @@ export function FigmaReference({
   const dialog = useRef<HTMLDialogElement>(null);
   const [image, setImage] = useState('');
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
   const document = snapshot?.document;
   const source = document?.source;
   useEffect(() => {
     setImage('');
     setError('');
-    setCopied(false);
     dialog.current?.close();
   }, [document?.id]);
   if (!source || !document || !snapshot) return null;
-  const page = document.pages.find(
-    (item) => item.id === snapshot.activePageId,
-  )!;
-  const nodeId =
-    page.nodes.find((item) => item.id === selection)?.id ??
-    page.nodes.find((item) => !item.parentId)?.id;
   async function show() {
     dialog.current?.showModal();
     try {
       setImage(
         await window.designer.asset(document!.id, source!.previewAssetId),
       );
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-  async function copy() {
-    const prompt = `Implement the design in my current codebase using the Agent Designer MCP server. Get design context for documentId ${document!.id}, pageId ${page.id}, nodeId ${nodeId}, expectedRevision ${document!.revision}. Follow nextOffset to retrieve the complete subtree. Call get_preview for the import-time visual reference, and get_asset for every required image/vector. Inspect and reuse existing components and styling conventions. Treat original Figma properties as import-time evidence; current neutral fields contain local edits. Do not implement the screenshot as the page. Build responsive, functional UI and compare a rendered screenshot against the reference. Report any unsupported design features.`;
-    try {
-      await window.designer.copyText(prompt);
-      setCopied(true);
     } catch (e) {
       setError(String(e));
     }
@@ -252,9 +234,6 @@ export function FigmaReference({
         </span>
         <div>
           <button onClick={() => void show()}>Reference & notes</button>
-          <button disabled={!nodeId} onClick={() => void copy()}>
-            {copied ? 'Prompt copied' : 'Copy coding prompt'}
-          </button>
         </div>
       </div>
       <dialog ref={dialog} className="workspace-dialog reference-dialog">

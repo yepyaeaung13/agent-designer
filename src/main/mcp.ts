@@ -1,3 +1,4 @@
+import { changesInput, getDesignChanges } from './design-changes';
 import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -6,8 +7,18 @@ import { requestSchema } from '../shared/design';
 import { z } from 'zod';
 import type { DocumentService } from './document-service';
 import { contextInput, getDesignContext } from './design-context';
+import { briefInput, getCodingBrief } from './coding-brief';
+import {
+  getCurrentPreview,
+  previewInput,
+  type PreviewRenderer,
+} from './current-preview';
 
-export async function startMcp(service: DocumentService, port = 0) {
+export async function startMcp(
+  service: DocumentService,
+  port = 0,
+  renderer?: PreviewRenderer,
+) {
   const token = randomBytes(32).toString('hex');
   const connections = new Set<McpServer>();
   const http = createServer(async (req, res) => {
@@ -45,7 +56,7 @@ export async function startMcp(service: DocumentService, port = 0) {
       }
       const server = new McpServer({
         name: 'agent-designer',
-        version: '0.3.0',
+        version: '0.6.0',
       });
       const result = (operation: () => unknown) => {
         try {
@@ -108,6 +119,27 @@ export async function startMcp(service: DocumentService, port = 0) {
           }),
       );
       server.registerTool(
+        'get_coding_brief',
+        {
+          description:
+            'Start a design-to-code handoff for a selected frame or layer. Returns revision-bound scope, visible sections, fonts, colors, required asset retrieval calls, reference freshness, import limitations and verification criteria. Does not generate or write code.',
+          inputSchema: briefInput.shape,
+          annotations: { readOnlyHint: true },
+        },
+        async (input) =>
+          result(() => getCodingBrief(service, input, Boolean(renderer))),
+      );
+      server.registerTool(
+        'get_design_changes',
+        {
+          description:
+            'Compare a saved coding brief changeTracking.baseline with the selected scope at a required expectedRevision. Reports added, removed and updated layer IDs, ancestor changes, and whether the selected design is unchanged despite a document revision. Client-supplied baseline; no historical values or code-match guarantee. Read-only.',
+          inputSchema: changesInput.shape,
+          annotations: { readOnlyHint: true },
+        },
+        async (input) => result(() => getDesignChanges(service, input)),
+      );
+      server.registerTool(
         'get_design_context',
         {
           description:
@@ -116,6 +148,46 @@ export async function startMcp(service: DocumentService, port = 0) {
           annotations: { readOnlyHint: true },
         },
         async (input) => result(() => getDesignContext(service, input)),
+      );
+      server.registerTool(
+        'get_current_preview',
+        {
+          description:
+            'Render the selected frame or layer from current saved canvas fields at a required expectedRevision. Returns a bounded PNG and exact scope/revision/scale metadata, including local edits. Does not switch the editor. This is the neutral canvas appearance, distinct from the original Figma reference. Rejects revision changes during rendering. maxDimension defaults to 2048 (256–4096).',
+          inputSchema: previewInput.shape,
+          annotations: { readOnlyHint: true },
+        },
+        async (input) => {
+          try {
+            const preview = await getCurrentPreview(service, input, renderer);
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: JSON.stringify(preview.metadata),
+                },
+                {
+                  type: 'image' as const,
+                  mimeType: 'image/png',
+                  data: preview.data,
+                },
+              ],
+            };
+          } catch (error) {
+            return {
+              isError: true,
+              content: [
+                {
+                  type: 'text' as const,
+                  text:
+                    error instanceof Error
+                      ? error.message
+                      : 'Current preview unavailable',
+                },
+              ],
+            };
+          }
+        },
       );
       server.registerTool(
         'get_preview',

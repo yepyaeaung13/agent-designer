@@ -279,6 +279,9 @@ test('MCP authenticates and targets background documents without changing the op
         'delete_document',
         'execute_command',
         'get_asset',
+        'get_coding_brief',
+        'get_current_preview',
+        'get_design_changes',
         'get_design_context',
         'get_preview',
         'list_documents',
@@ -315,6 +318,28 @@ test('MCP authenticates and targets background documents without changing the op
       }),
     );
     assert.equal(read.document.pages[0].nodes[0].id, node.id);
+    const brief = unpack(
+      await client.callTool({
+        name: 'get_coding_brief',
+        arguments: { documentId, pageId, nodeId: node.id, expectedRevision: 1 },
+      }),
+    );
+    assert.equal(brief.selection.id, undefined);
+    assert.equal(brief.scope.nodeId, node.id);
+    assert.equal(brief.preview.available, false);
+    const unchanged = unpack(
+      await client.callTool({
+        name: 'get_design_changes',
+        arguments: { ...brief.scope, baseline: brief.changeTracking.baseline },
+      }),
+    );
+    assert.equal(unchanged.unchanged, true);
+    assert.equal(unchanged.toRevision, 1);
+    const staleBrief = await client.callTool({
+      name: 'get_coding_brief',
+      arguments: { documentId, pageId, nodeId: node.id, expectedRevision: 0 },
+    });
+    assert.equal(staleBrief.isError, true);
     assert.equal(service.read().document.id, activeId);
     const conflict = await client.callTool({
       name: 'execute_command',

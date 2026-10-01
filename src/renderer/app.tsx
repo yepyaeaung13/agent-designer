@@ -1,6 +1,16 @@
+import { FontControls } from './font-controls';
+import {
+  ensureFonts,
+  fontStack,
+  fontVersion,
+  onFontsChanged,
+} from './font-manager';
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { TypographyControls } from './typography-controls';
+import { ExportControls } from './export-controls';
+import { CodingHandoff } from './coding-handoff';
+import { SpacingOverlay } from './spacing-overlay';
 import { ShadowGroup } from './shadow-group';
 import { EffectControls, canvasEffects } from './effect-controls';
 import { useRightPan } from './use-right-pan';
@@ -31,6 +41,7 @@ import {
 } from './figma-controls';
 import '../index.css';
 import './theme.css';
+import './current-preview';
 
 function savedTheme(): 'dark' | 'light' {
   try {
@@ -53,6 +64,12 @@ const symbols = {
 };
 useStrictMode(true);
 function App() {
+  const [fontsVersion, setFontsVersion] = useState(fontVersion());
+  useEffect(() => {
+    const unsubscribe = onFontsChanged(() => setFontsVersion(fontVersion()));
+    void ensureFonts().catch(() => {});
+    return unsubscribe;
+  }, []);
   const [theme, setTheme] = useState(initialTheme);
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -371,10 +388,11 @@ function App() {
                 />
               ) : node.type === 'text' ? (
                 <Text
+                  key={fontsVersion}
                   {...properties}
                   text={node.text}
                   fontSize={node.fontSize}
-                  fontFamily={node.fontFamily ?? 'Arial'}
+                  fontFamily={fontStack(node.fontFamily)}
                   fontStyle={`${node.fontStyle === 'italic' ? 'italic ' : ''}${node.fontWeight ?? 400}`}
                   lineHeight={
                     node.lineHeight ? node.lineHeight / node.fontSize : 1
@@ -496,6 +514,8 @@ function App() {
         </aside>
         <main className="canvas-column">
           <FigmaReference snapshot={snapshot} selection={selection} />
+          <CodingHandoff snapshot={snapshot} selection={selection} />
+          <FontControls nodes={page?.nodes ?? []} />
           <div className="toolbar">
             <div className="tool-group">
               <button
@@ -629,6 +649,15 @@ function App() {
                 />
               </Layer>
             </Stage>
+            <SpacingOverlay
+              stage={stage}
+              viewport={viewport}
+              selected={selected}
+              nodes={page?.nodes ?? []}
+              zoom={zoom}
+              pan={pan}
+              revision={snapshot?.document.revision}
+            />
             <div className="canvas-hint">
               Scroll to zoom <span>·</span> Right-drag to pan <span>·</span> H
               to pan <span>·</span> V to select
@@ -836,6 +865,13 @@ function App() {
                   Locked
                 </label>
               </div>
+              <ExportControls
+                node={selected}
+                nodes={page!.nodes}
+                documentId={snapshot!.document.id}
+                stage={stage}
+                busy={busy}
+              />
               <button
                 className="delete-button"
                 disabled={busy || selected.locked}
