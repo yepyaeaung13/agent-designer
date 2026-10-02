@@ -14,6 +14,13 @@ const result = spawnSync(
     'tests/current-preview.test.ts',
     'tests/design-changes.test.ts',
     'tests/fonts.test.ts',
+    'tests/font-assets.test.ts',
+    'tests/component-manifest.test.ts',
+    'tests/layout-context.test.ts',
+    'tests/layout-item.test.ts',
+    'tests/auto-layout.test.ts',
+    'tests/text-measurement.test.ts',
+    'tests/grid-layout.test.ts',
   ],
   {
     stdio: 'inherit',

@@ -60,6 +60,33 @@ figma.ui.onmessage = async (message) => {
       for (const child of node.children || []) visit(child, depth + 1);
     }
     visit(entry.document, 0);
+    // JSON_REST_V1 may omit newer grid fields; copy them from the selected tree.
+    const exportedById = new Map(nodes.map((node) => [node.id, node]));
+    function copyGrid(live) {
+      const raw = exportedById.get(live.id);
+      if (raw && live.layoutMode === 'GRID') {
+        raw.layoutMode = 'GRID';
+        for (const field of ['gridColumnSizes', 'gridRowSizes'])
+          raw[field] = live[field].map((track) => ({
+            type: track.type,
+            ...(track.value === undefined ? {} : { value: track.value }),
+          }));
+        raw.gridColumnGap = live.gridColumnGap;
+        raw.gridRowGap = live.gridRowGap;
+      }
+      if (raw && live.parent && live.parent.layoutMode === 'GRID')
+        for (const field of [
+          'gridRowAnchorIndex',
+          'gridColumnAnchorIndex',
+          'gridRowSpan',
+          'gridColumnSpan',
+          'gridChildHorizontalAlign',
+          'gridChildVerticalAlign',
+        ])
+          raw[field] = live[field];
+      for (const child of live.children || []) copyGrid(child);
+    }
+    copyGrid(selected);
     // Recover image references from live paints when REST-shaped export omits them.
     for (const node of nodes) {
       if (

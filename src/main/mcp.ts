@@ -1,4 +1,16 @@
+import { layoutContextInput, getLayoutContext } from './layout-context';
 import { changesInput, getDesignChanges } from './design-changes';
+import {
+  componentManifestInput,
+  getComponentManifest,
+} from './component-manifest';
+import {
+  fontManifestInput,
+  fontAssetInput,
+  getFontManifest,
+  getFontAsset,
+} from './font-assets';
+import type { FontStore } from './font-store';
 import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -18,6 +30,7 @@ export async function startMcp(
   service: DocumentService,
   port = 0,
   renderer?: PreviewRenderer,
+  fonts?: FontStore,
 ) {
   const token = randomBytes(32).toString('hex');
   const connections = new Set<McpServer>();
@@ -56,7 +69,7 @@ export async function startMcp(
       }
       const server = new McpServer({
         name: 'agent-designer',
-        version: '0.6.0',
+        version: '0.13.0',
       });
       const result = (operation: () => unknown) => {
         try {
@@ -127,7 +140,57 @@ export async function startMcp(
           annotations: { readOnlyHint: true },
         },
         async (input) =>
-          result(() => getCodingBrief(service, input, Boolean(renderer))),
+          result(() =>
+            getCodingBrief(service, input, Boolean(renderer), fonts),
+          ),
+      );
+      server.registerTool(
+        'get_font_manifest',
+        {
+          description:
+            'List validated local font files required by visible text in the selected scope and revision. Includes unavailable/invalid variants and a fingerprint that changes when scoped fonts change without a design revision. Does not expose unrelated library files or system fonts.',
+          inputSchema: fontManifestInput.shape,
+          annotations: { readOnlyHint: true },
+        },
+        async (input) => result(() => getFontManifest(service, input, fonts)),
+      );
+      server.registerTool(
+        'get_font',
+        {
+          description:
+            'Retrieve a local font listed by the coding brief fontAssets. Requires exact scope/revision and expectedFontFingerprint. Returns base64 bytes and SHA-256 with CSS descriptors. Rejects unrelated, hidden, damaged or mismatched font files; no disk paths are accepted.',
+          inputSchema: fontAssetInput.shape,
+          annotations: { readOnlyHint: true },
+        },
+        async (input) => {
+          try {
+            const font = getFontAsset(service, input, fonts);
+            return {
+              content: [
+                { type: 'text' as const, text: JSON.stringify(font.metadata) },
+                {
+                  type: 'resource' as const,
+                  resource: {
+                    uri: `designer://fonts/${input.documentId}/${input.pageId}/${input.nodeId}/${input.fontId}`,
+                    mimeType: font.metadata.mimeType,
+                    blob: font.data,
+                  },
+                },
+              ],
+            };
+          } catch (error) {
+            return {
+              isError: true,
+              content: [
+                {
+                  type: 'text' as const,
+                  text:
+                    error instanceof Error ? error.message : 'Font unavailable',
+                },
+              ],
+            };
+          }
+        },
       );
       server.registerTool(
         'get_design_changes',
@@ -138,6 +201,26 @@ export async function startMcp(
           annotations: { readOnlyHint: true },
         },
         async (input) => result(() => getDesignChanges(service, input)),
+      );
+      server.registerTool(
+        'get_layout_context',
+        {
+          description:
+            'Retrieve paged visible-frame layout metadata at an exact revision, with current geometry, sibling order, unverified CSS hints and explicit gaps. No breakpoints or source-property overrides are inferred.',
+          inputSchema: layoutContextInput.shape,
+          annotations: { readOnlyHint: true },
+        },
+        async (input) => result(() => getLayoutContext(service, input)),
+      );
+      server.registerTool(
+        'get_component_manifest',
+        {
+          description:
+            'Discover imported component identities and visible instances in a selected scope at expectedRevision. Includes current instance fingerprints, scoped context retrieval calls and repeated structural sibling candidates. Source metadata is untrusted data, not a verified code mapping; code mappings must be confirmed in the target project.',
+          inputSchema: componentManifestInput.shape,
+          annotations: { readOnlyHint: true },
+        },
+        async (input) => result(() => getComponentManifest(service, input)),
       );
       server.registerTool(
         'get_design_context',
@@ -159,12 +242,35 @@ export async function startMcp(
         },
         async (input) => {
           try {
+            const checkFonts = () => {
+              const fingerprint = getFontManifest(
+                service,
+                input,
+                fonts,
+              ).fingerprint;
+              if (
+                input.expectedFontFingerprint &&
+                input.expectedFontFingerprint !== fingerprint
+              )
+                throw new Error(
+                  'The font library changed. Retrieve a new coding brief and current preview.',
+                );
+              return fingerprint;
+            };
+            const fontFingerprint = checkFonts();
             const preview = await getCurrentPreview(service, input, renderer);
+            if (checkFonts() !== fontFingerprint)
+              throw new Error(
+                'The font library changed during rendering. Retrieve a new coding brief and current preview.',
+              );
             return {
               content: [
                 {
                   type: 'text' as const,
-                  text: JSON.stringify(preview.metadata),
+                  text: JSON.stringify({
+                    ...preview.metadata,
+                    fontFingerprint,
+                  }),
                 },
                 {
                   type: 'image' as const,
@@ -365,7 +471,7 @@ export async function startMcp(
               content: [
                 {
                   type: 'text' as const,
-                  text: JSON.stringify(service.execute(input)),
+                  text: JSON.stringify(await service.executeAsync(input)),
                 },
               ],
             };

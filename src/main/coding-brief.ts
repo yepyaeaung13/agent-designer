@@ -1,4 +1,8 @@
+import { getLayoutContext } from './layout-context';
 import { designBaseline } from './design-changes';
+import { getComponentManifest } from './component-manifest';
+import { getFontManifest } from './font-assets';
+import type { FontStore } from './font-store';
 import type { DocumentService } from './document-service';
 import {
   contextInput,
@@ -12,6 +16,7 @@ export function getCodingBrief(
   service: DocumentService,
   input: unknown,
   currentPreviewAvailable = false,
+  fontStore?: FontStore,
 ) {
   const request = briefInput.parse(input);
   const context = getDesignContext(service, {
@@ -73,6 +78,9 @@ export function getCodingBrief(
     nodeId: root.id,
     expectedRevision: document.revision,
   };
+  const fontAssets = getFontManifest(service, scope, fontStore);
+  const components = getComponentManifest(service, scope);
+  const layout = getLayoutContext(service, { ...scope, limit: 1 });
   return {
     scope,
     changeTracking: {
@@ -104,6 +112,26 @@ export function getCodingBrief(
         height: node.height,
       })),
     fonts: [...fonts.values()],
+    fontAssets,
+    componentHandoff: {
+      componentCount: components.componentCount,
+      instanceCount: components.instanceCount,
+      repeatedPatternCount: components.repeatedPatterns.length,
+      retrieve: { tool: 'get_component_manifest', arguments: scope },
+      note: components.note,
+    },
+    layoutHandoff: {
+      totalFrames: layout.totalFrames,
+      autoLayoutFrames: layout.autoLayoutFrames,
+      liveEnabledFrames: layout.liveEnabledFrames,
+      measurementMode: layout.measurementMode,
+      framesWithWarnings: layout.framesWithWarnings,
+      retrieve: {
+        tool: 'get_layout_context',
+        arguments: { ...scope, offset: 0, limit: 100 },
+      },
+      note: 'Follow nextOffset at the same revision. CSS hints are unverified desktop starting points; resolve warnings and choose/test responsive adaptations in target code.',
+    },
     colors: [...colors]
       .sort((a, b) => b[1] - a[1])
       .map(([value, layerUses]) => ({ value, layerUses })),
@@ -123,7 +151,11 @@ export function getCodingBrief(
         ? {
             retrieve: {
               tool: 'get_current_preview',
-              arguments: { ...scope, maxDimension: 2048 },
+              arguments: {
+                ...scope,
+                maxDimension: 2048,
+                expectedFontFingerprint: fontAssets.fingerprint,
+              },
             },
           }
         : {}),
@@ -165,7 +197,7 @@ export function getCodingBrief(
             'Some visible layers reference missing assets. Report them rather than substituting unrelated imagery.',
           ]
         : []),
-      'Font families are design requirements, not bundled font files. Check font availability and licensing in the target project.',
+      'Retrieve available fontAssets through get_font and verify sha256. Preserve family, weight, style and variationSettings when registering them. Report unavailable/invalid variants and check redistribution rights before publishing font files.',
       'Auto-layout and component metadata do not imply a live layout engine or verified code component mappings.',
     ],
     context: {

@@ -1,5 +1,6 @@
 import type { DesignNode } from '../shared/design';
 import Konva from 'konva';
+import { textLayout } from './text-layout';
 import {
   fontCovers,
   type FontRequest,
@@ -43,7 +44,7 @@ export function textOverflow(nodes: DesignNode[]): TextOverflow[] {
       if (hidden) continue;
       const text = new Konva.Text({
         text: node.text,
-        width: node.width,
+        ...textLayout(node),
         fontSize: node.fontSize,
         fontFamily: fontStack(node.fontFamily),
         fontStyle: `${node.fontStyle === 'italic' ? 'italic ' : ''}${node.fontWeight ?? 400}`,
@@ -75,27 +76,44 @@ export function requestedFonts(nodes: DesignNode[]) {
   return [...unique.values()];
 }
 export async function refreshFonts() {
-  if (pending) await pending;
+  if (pending) return pending;
   pending = (async () => {
     const next = await window.designer.listFonts();
     const loaded: FontFace[] = [],
       errors = new Set<string>();
-    for (const entry of next) {
-      try {
-        const bytes = Uint8Array.from(
-          atob(await window.designer.fontData(entry.id)),
-          (char) => char.charCodeAt(0),
-        );
-        const face = new FontFace(entry.family, bytes.buffer, {
-          weight: entry.weight,
-          style: entry.style,
-        });
-        await face.load();
-        loaded.push(face);
-      } catch {
-        errors.add(entry.id);
-      }
-    }
+    await Promise.all(
+      next.map(async (entry) => {
+        try {
+          if (entry.validationError) throw new Error(entry.validationError);
+          const bytes = Uint8Array.from(
+            atob(await window.designer.fontData(entry.id)),
+            (char) => char.charCodeAt(0),
+          );
+          const face = new FontFace(entry.family, bytes.buffer, {
+            weight: entry.weight,
+            style: entry.style,
+            variationSettings: entry.variationSettings,
+          });
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            await Promise.race([
+              face.load(),
+              new Promise<never>((_, reject) => {
+                timer = setTimeout(
+                  () => reject(new Error('Font loading timed out.')),
+                  5000,
+                );
+              }),
+            ]);
+          } finally {
+            if (timer) clearTimeout(timer);
+          }
+          loaded.push(face);
+        } catch {
+          errors.add(entry.id);
+        }
+      }),
+    );
     for (const face of faces) document.fonts.delete(face);
     for (const face of loaded) document.fonts.add(face);
     entries = next;
@@ -139,11 +157,14 @@ export async function resolveFonts(nodes: DesignNode[]): Promise<FontStatus[]> {
   await ensureFonts();
   return Promise.all(
     requestedFonts(nodes).map(async (request) => {
-      const exact = entries.find((entry) => fontCovers(entry, request));
+      const matches = entries.filter((entry) => fontCovers(entry, request));
+      const exact =
+        matches.find((entry) => !failures.has(entry.id)) ?? matches[0];
       if (exact)
         return {
           ...request,
           fontId: exact.id,
+          ...(exact.validationError ? { message: exact.validationError } : {}),
           status: failures.has(exact.id)
             ? ('error' as const)
             : ('local' as const),

@@ -31,6 +31,8 @@ export const localFontSchema = fontRequestSchema
       .int()
       .positive()
       .max(20 * 1024 * 1024),
+    variationSettings: z.string().optional(),
+    validationError: z.string().optional(),
   })
   .strict();
 export const fontStatusSchema = z
@@ -40,6 +42,7 @@ export const fontStatusSchema = z
     style: z.enum(['normal', 'italic']),
     status: z.enum(['local', 'system', 'substituted', 'missing', 'error']),
     fontId: z.string().optional(),
+    message: z.string().optional(),
   })
   .strict();
 export type FontImport = z.infer<typeof fontRequestSchema>;

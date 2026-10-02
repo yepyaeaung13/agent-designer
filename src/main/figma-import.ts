@@ -1,3 +1,4 @@
+import { importedLayoutItem, importedGrid } from './layout-item-import';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -279,8 +280,10 @@ export function normalizeFigma(
           item.imageRef ? [item.imageRef] : [],
         ),
       },
+      layoutItem: importedLayoutItem(raw, parent, type === 'frame'),
       layout: container
         ? {
+            grid: importedGrid(raw),
             direction:
               raw.layoutMode === 'HORIZONTAL'
                 ? 'horizontal'

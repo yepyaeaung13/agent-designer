@@ -1,5 +1,6 @@
 import { ensureFonts } from './font-manager';
 import Konva from 'konva';
+import { textLayout } from './text-layout';
 import type { DesignNode } from '../shared/design';
 
 const escape = (value: string) =>
@@ -80,6 +81,7 @@ export async function exportSvg(
         for (const word of paragraph.split(/(?<=\s)/)) {
           const candidate = line + word;
           if (
+            textLayout(node).wrap !== 'none' &&
             line &&
             measure.measureText(candidate).width +
               candidate.length * (node.letterSpacing ?? 0) >
@@ -101,7 +103,7 @@ export async function exportSvg(
             ? 'end'
             : 'start';
       const x = align === 'middle' ? w / 2 : align === 'end' ? w : 0;
-      content = `<text clip-path="url(#${id}-text)" ${fill}${stroke} font-family="${escape(node.fontFamily ?? 'Arial')}" font-size="${fontSize}" font-weight="${node.fontWeight ?? 400}" font-style="${node.fontStyle ?? 'normal'}" letter-spacing="${node.letterSpacing ?? 0}" text-anchor="${align}" xml:space="preserve">${lines.map((line, index) => `<tspan x="${x}" y="${(index + 0.5) * lineHeight}" dominant-baseline="central">${escape(line)}</tspan>`).join('')}</text>`;
+      content = `<text ${fill}${stroke} font-family="${escape(node.fontFamily ?? 'Arial')}" font-size="${fontSize}" font-weight="${node.fontWeight ?? 400}" font-style="${node.fontStyle ?? 'normal'}" letter-spacing="${node.letterSpacing ?? 0}" text-anchor="${align}" xml:space="preserve">${lines.map((line, index) => `<tspan x="${x}" y="${(index + 0.5) * lineHeight}" dominant-baseline="central">${escape(line)}</tspan>`).join('')}</text>`;
     } else
       content = `<rect width="${w}" height="${h}" rx="${node.cornerRadius}" ${fill}${stroke}/>`;
     if (node.backgroundAssetId)

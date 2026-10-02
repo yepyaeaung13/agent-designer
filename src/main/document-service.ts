@@ -1,3 +1,5 @@
+import { recalculateAutoLayout } from '../shared/auto-layout';
+import { recoverLayoutItems } from './layout-item-import';
 import Database from 'better-sqlite3';
 import { EventEmitter } from 'node:events';
 import { z } from 'zod';
@@ -9,6 +11,7 @@ import {
   workspaceActionSchema,
   validateTree,
   type DesignDocument,
+  type DesignNode,
   type Snapshot,
 } from '../shared/design';
 
@@ -20,6 +23,23 @@ export class DocumentService extends EventEmitter {
   private activeId = '';
   private pages: Record<string, string> = {};
   private sequence = 0;
+  private layoutRecalculator?: (
+    nodes: DesignNode[],
+    previous: DesignNode[],
+  ) => Promise<DesignNode[]>;
+  setLayoutRecalculator(
+    recalculate: (
+      nodes: DesignNode[],
+      previous: DesignNode[],
+    ) => Promise<DesignNode[]>,
+  ) {
+    this.layoutRecalculator = recalculate;
+  }
+  get layoutMeasurementMode() {
+    return this.layoutRecalculator
+      ? 'loaded-font-hug-text'
+      : 'saved-leaf-bounds';
+  }
 
   constructor(filename: string) {
     super();
@@ -263,6 +283,29 @@ export class DocumentService extends EventEmitter {
   }
 
   execute(input: unknown): Snapshot {
+    return this.prepare(input)();
+  }
+  async executeAsync(input: unknown): Promise<Snapshot> {
+    let candidate: { nodes: DesignNode[]; previous: DesignNode[] } | undefined;
+    const commit = this.prepare(input, (nodes, previous = nodes) => {
+      candidate = { nodes, previous };
+    });
+    if (candidate) {
+      const { nodes, previous } = candidate;
+      if (this.layoutRecalculator && nodes.some((n) => n.layout?.enabled)) {
+        const result = await this.layoutRecalculator(
+          structuredClone(nodes),
+          structuredClone(previous),
+        );
+        nodes.splice(0, nodes.length, ...result);
+      } else recalculateAutoLayout(nodes, previous);
+    }
+    return commit();
+  }
+  private prepare(
+    input: unknown,
+    recalculate: typeof recalculateAutoLayout = recalculateAutoLayout,
+  ): () => Snapshot {
     const { documentId, pageId, expectedRevision, command } =
       requestSchema.parse(input);
     const document = this.get(documentId);
@@ -273,7 +316,7 @@ export class DocumentService extends EventEmitter {
     let next = structuredClone(previous);
     if (command.type === 'undo' || command.type === 'redo') {
       const stack = history[command.type];
-      if (!stack.length) return this.read(documentId);
+      if (!stack.length) return () => this.read(documentId);
       next = structuredClone(stack[stack.length - 1]);
     } else if (command.type === 'rename') next.name = command.name;
     else if (command.type === 'create_page')
@@ -290,7 +333,29 @@ export class DocumentService extends EventEmitter {
       const page = next.pages.find((item) => item.id === pageId);
       if (!page)
         throw new Error('A valid pageId is required for node commands.');
-      if (command.type === 'create') page.nodes.push(command.node);
+      if (command.type === 'set_auto_layout') {
+        const node = page.nodes.find((n) => n.id === command.id);
+        if (
+          !node?.layout ||
+          !['horizontal', 'vertical', 'grid'].includes(node.layout.direction)
+        )
+          throw new Error(
+            'Select a horizontal, vertical or grid auto-layout frame.',
+          );
+        if (node.locked)
+          throw new Error('Unlock this frame before changing live layout.');
+        node.layout.enabled = command.enabled;
+      } else if (command.type === 'recover_layout_metadata') {
+        if (
+          !recoverLayoutItems(
+            page.nodes,
+            command.id,
+            this.getSource(document.id),
+            document.source?.nodeId,
+          )
+        )
+          return () => this.read(documentId);
+      } else if (command.type === 'create') page.nodes.push(command.node);
       else {
         const node = page.nodes.find((item) => item.id === command.id);
         if (!node) throw new Error('Node not found on this page.');
@@ -312,29 +377,53 @@ export class DocumentService extends EventEmitter {
     next.revision = previous.revision + 1;
     next = documentSchema.parse(next);
     validateTree(next);
-    const pages = {
-      ...this.pages,
-      [documentId]: this.validPage(next, this.pages[documentId]),
-    };
-    this.db.transaction(() => {
-      this.persist(next);
-      this.saveWorkspace(this.activeId, pages);
-    })();
-    if (command.type === 'undo') {
-      history.undo.pop();
-      history.redo.push(previous);
-    } else if (command.type === 'redo') {
-      history.redo.pop();
-      history.undo.push(previous);
-    } else {
-      history.undo.push(previous);
-      history.redo = [];
+    if (
+      [
+        'create',
+        'update',
+        'delete',
+        'set_auto_layout',
+        'recover_layout_metadata',
+      ].includes(command.type)
+    ) {
+      const page = next.pages.find((p) => p.id === pageId);
+      if (page)
+        recalculate(
+          page.nodes,
+          previous.pages.find((p) => p.id === pageId)?.nodes,
+        );
     }
-    if (history.undo.length > 100) history.undo.shift();
-    this.documents.set(documentId, next);
-    this.pages = pages;
-    this.notify();
-    return this.read(documentId);
+    return () => {
+      if (this.get(documentId).revision !== expectedRevision)
+        throw new Error(
+          'The design changed during layout measurement. Refresh and try again.',
+        );
+      next = documentSchema.parse(next);
+      validateTree(next);
+      const pages = {
+        ...this.pages,
+        [documentId]: this.validPage(next, this.pages[documentId]),
+      };
+      this.db.transaction(() => {
+        this.persist(next);
+        this.saveWorkspace(this.activeId, pages);
+      })();
+      if (command.type === 'undo') {
+        history.undo.pop();
+        history.redo.push(previous);
+      } else if (command.type === 'redo') {
+        history.redo.pop();
+        history.undo.push(previous);
+      } else {
+        history.undo.push(previous);
+        history.redo = [];
+      }
+      if (history.undo.length > 100) history.undo.shift();
+      this.documents.set(documentId, next);
+      this.pages = pages;
+      this.notify();
+      return this.read(documentId);
+    };
   }
   private persist(document: DesignDocument) {
     this.db

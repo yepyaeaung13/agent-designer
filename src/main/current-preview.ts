@@ -13,6 +13,10 @@ import type { DesignNode } from '../shared/design';
 export const previewInput = briefInput.extend({
   expectedRevision: z.number().int().nonnegative(),
   maxDimension: z.number().int().min(256).max(4096).default(2048),
+  expectedFontFingerprint: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
 });
 export type PreviewRenderInput = {
   documentId: string;

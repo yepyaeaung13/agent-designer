@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
+import { validateFont } from './font-metadata';
 import {
   fontRequestSchema,
   localFontSchema,
@@ -33,7 +34,23 @@ export class FontStore {
       ).fonts;
   }
   list() {
-    return this.fonts.map((font) => ({ ...font }));
+    return this.fonts.map((font) => {
+      try {
+        return {
+          ...font,
+          variationSettings: validateFont(
+            Buffer.from(this.data(font.id), 'base64'),
+            font,
+          ),
+        };
+      } catch (error) {
+        return {
+          ...font,
+          validationError:
+            error instanceof Error ? error.message : 'Font validation failed.',
+        };
+      }
+    });
   }
   private file(font: LocalFont) {
     return path.join(this.directory, `${font.id}.${font.format}`);
@@ -64,6 +81,7 @@ export class FontStore {
       throw new Error(
         'This is not a supported TTF, OTF, WOFF or WOFF2 font. Font collections are not supported.',
       );
+    validateFont(bytes, request);
     const id = createHash('sha256')
       .update(bytes)
       .update(JSON.stringify(request))
@@ -103,7 +121,7 @@ export class FontStore {
         /* Active manifest and new file remain valid if old-file cleanup fails. */
       }
     }
-    return { ...font };
+    return { ...font, variationSettings: validateFont(bytes, request) };
   }
   data(input: unknown) {
     const id = z
@@ -128,6 +146,7 @@ export class FontStore {
       throw new Error(
         'The saved font file is damaged. Load the original font again.',
       );
+    validateFont(bytes, font);
     return bytes.toString('base64');
   }
   remove(input: unknown) {

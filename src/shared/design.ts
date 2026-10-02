@@ -1,3 +1,5 @@
+import { layoutItemSchema } from './layout-item';
+import { gridSchema } from './grid';
 import type { FontImport, LocalFont } from './fonts';
 import { z } from 'zod';
 
@@ -51,8 +53,11 @@ export const nodeSchema = z
       .string()
       .regex(/^[a-f0-9]{64}$/)
       .optional(),
+    layoutItem: layoutItemSchema.optional(),
     layout: z
       .object({
+        enabled: z.boolean().optional(),
+        grid: gridSchema.optional(),
         direction: z.enum(['none', 'horizontal', 'vertical', 'grid']),
         gap: z.number(),
         padding: z.object({
@@ -130,6 +135,15 @@ export const commandSchema = z.discriminatedUnion('type', [
     patch: patchSchema,
   }),
   z.object({ type: z.literal('delete'), id: z.string().uuid() }),
+  z.object({
+    type: z.literal('set_auto_layout'),
+    id: z.string().uuid(),
+    enabled: z.boolean(),
+  }),
+  z.object({
+    type: z.literal('recover_layout_metadata'),
+    id: z.string().uuid(),
+  }),
   z.object({
     type: z.literal('rename'),
     name: z.string().trim().min(1).max(120),

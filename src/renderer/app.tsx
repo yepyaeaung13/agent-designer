@@ -1,4 +1,8 @@
+import { LayoutDetails } from './layout-details';
+import { LayoutControls } from './layout-controls';
+import './live-layout';
 import { FontControls } from './font-controls';
+import { textLayout } from './text-layout';
 import {
   ensureFonts,
   fontStack,
@@ -248,7 +252,7 @@ function App() {
     const handler = (event: KeyboardEvent) => {
       if (
         (event.target as HTMLElement).closest(
-          'input,textarea,button,dialog,[contenteditable]',
+          'input,textarea,select,button,dialog,[contenteditable]',
         )
       )
         return;
@@ -390,13 +394,11 @@ function App() {
                 <Text
                   key={fontsVersion}
                   {...properties}
+                  {...textLayout(node)}
                   text={node.text}
                   fontSize={node.fontSize}
                   fontFamily={fontStack(node.fontFamily)}
                   fontStyle={`${node.fontStyle === 'italic' ? 'italic ' : ''}${node.fontWeight ?? 400}`}
-                  lineHeight={
-                    node.lineHeight ? node.lineHeight / node.fontSize : 1
-                  }
                   letterSpacing={node.letterSpacing ?? 0}
                   align={node.textAlign ?? 'left'}
                 />
@@ -841,6 +843,51 @@ function App() {
                   update={update}
                 />
               </div>
+              <LayoutDetails node={selected} />
+              <LayoutControls
+                node={selected}
+                parent={page?.nodes.find((n) => n.id === selected.parentId)}
+                disabled={busy || selected.locked}
+                update={update}
+              />
+              {selected.layout &&
+                ['horizontal', 'vertical', 'grid'].includes(
+                  selected.layout.direction,
+                ) && (
+                  <button
+                    disabled={busy || selected.locked}
+                    onClick={() =>
+                      void execute({
+                        type: 'set_auto_layout',
+                        id: selected.id,
+                        enabled: !selected.layout?.enabled,
+                      })
+                    }
+                  >
+                    {selected.layout.enabled
+                      ? 'Disable live auto-layout'
+                      : 'Enable live auto-layout'}
+                  </button>
+                )}
+              {snapshot!.document.source && (
+                <>
+                  <button
+                    disabled={busy || selected.locked}
+                    onClick={() =>
+                      void execute({
+                        type: 'recover_layout_metadata',
+                        id: selected.id,
+                      })
+                    }
+                  >
+                    Recover imported layout details
+                  </button>
+                  <p>
+                    Fills missing details for this layer and its descendants.
+                    Existing details stay intact. Undo is available.
+                  </p>
+                </>
+              )}
               <div className="toggles">
                 <label>
                   <input

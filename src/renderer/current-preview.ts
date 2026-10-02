@@ -1,5 +1,6 @@
 import { fontStack, resolveFonts, textOverflow } from './font-manager';
 import Konva from 'konva';
+import { textLayout } from './text-layout';
 import { canvasEffects } from './effect-controls';
 import type { PreviewRenderInput } from '../main/current-preview';
 
@@ -103,10 +104,10 @@ async function renderCurrentPreview(input: PreviewRenderInput) {
         new Konva.Text({
           ...properties,
           text: node.text,
+          ...textLayout(node),
           fontSize: node.fontSize,
           fontFamily: fontStack(node.fontFamily),
           fontStyle: `${node.fontStyle === 'italic' ? 'italic ' : ''}${node.fontWeight ?? 400}`,
-          lineHeight: node.lineHeight ? node.lineHeight / node.fontSize : 1,
           letterSpacing: node.letterSpacing ?? 0,
           align: node.textAlign ?? 'left',
         }),

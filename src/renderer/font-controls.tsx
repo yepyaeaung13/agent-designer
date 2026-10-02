@@ -137,6 +137,7 @@ export function FontControls({ nodes }: { nodes: DesignNode[] }) {
                     error: 'File could not load',
                   }[font.status]
                 }
+                {font.message && <small>{font.message}</small>}
               </span>
               <button
                 disabled={busy}
@@ -153,7 +154,8 @@ export function FontControls({ nodes }: { nodes: DesignNode[] }) {
         </div>
         <p className="muted">
           Installed-family detection does not guarantee every weight or glyph is
-          available. Text that exceeds its saved box can still clip.
+          available. Text can overflow its saved box; clipping frames still clip
+          it.
         </p>
         {clipped > 0 && (
           <p role="status">

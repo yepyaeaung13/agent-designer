@@ -51,6 +51,36 @@ else {
       let importing = false;
       let connection: ConnectionInfo;
       let previewBusy = false;
+      service.setLayoutRecalculator(async (nodes, previous) => {
+        const window = BrowserWindow.getAllWindows().find(
+          (w) => !w.isDestroyed(),
+        );
+        if (!window || window.webContents.isLoadingMainFrame())
+          throw new Error(
+            'The text measurement renderer is not ready. Try again after the editor loads.',
+          );
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          return await Promise.race([
+            window.webContents.executeJavaScript(
+              `window.__recalculateLiveLayout(${JSON.stringify(nodes)},${JSON.stringify(previous)})`,
+            ),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      'Text measurement timed out. No design changes were saved.',
+                    ),
+                  ),
+                20000,
+              );
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
+      });
       const renderPreview: PreviewRenderer = async (input) => {
         const window = BrowserWindow.getAllWindows().find(
           (window) => !window.isDestroyed(),
@@ -71,7 +101,7 @@ else {
         }
       };
       try {
-        mcp = await startMcp(service, 0, renderPreview);
+        mcp = await startMcp(service, 0, renderPreview, fonts);
         connection = { url: mcp.url, token: mcp.token, databasePath };
       } catch (error) {
         connection = {
@@ -280,7 +310,7 @@ else {
       );
       ipcMain.handle('design:execute', (event, request: unknown) => {
         trusted(event);
-        return service!.execute(request);
+        return service!.executeAsync(request);
       });
       ipcMain.handle('design:connection', (event) => {
         trusted(event);
