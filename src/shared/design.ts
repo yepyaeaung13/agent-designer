@@ -274,6 +274,7 @@ export interface DesignerApi {
   workspace(action: WorkspaceAction): Promise<Snapshot>;
   execute(request: CommandRequest): Promise<Snapshot>;
   connection(): Promise<ConnectionInfo>;
+  resetConnection(): Promise<ConnectionInfo>;
   onChanged(listener: (snapshot: Snapshot) => void): () => void;
 }
 

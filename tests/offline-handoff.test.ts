@@ -14,6 +14,7 @@ import { flattenFigma, needsRender } from '../src/main/figma-import';
 import { startMcp } from '../src/main/mcp';
 import { codingPrompt } from '../src/shared/coding-handoff';
 import { root, png } from './fixtures/figma.cjs';
+import handoff from '../scripts/design-handoff.cjs';
 
 function fontBytes() {
   const bytes = Buffer.alloc(156);
@@ -235,6 +236,23 @@ test('plugin-file handoff survives restart and local edits without external requ
     );
     assert.equal(json(preview).revision, revision);
     assert.equal(previewCount, 1);
+    const snapshot = await handoff.retrieveHandoff(
+      client,
+      current,
+      brief.changeTracking.baseline,
+    );
+    assert.equal(snapshot.receipts.brief.scope.expectedRevision, revision);
+    assert.equal(snapshot.receipts.changes.unchanged, false);
+    assert.deepEqual(
+      snapshot.files.get(`public/fonts/${available[0].asset.filename}`),
+      fontBytes(),
+    );
+    assert.deepEqual(snapshot.files.get('design/current.png'), png);
+    assert.deepEqual(snapshot.files.get('design/reference.png'), png);
+    assert.equal(
+      snapshot.receipts.context.flatMap((page: any) => page.nodes).length,
+      layers.length,
+    );
     const stale = await client.callTool({
       name: 'get_design_context',
       arguments: scope,

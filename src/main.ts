@@ -1,3 +1,6 @@
+import { McpConnectionStore } from './main/mcp-connection';
+import { randomBytes } from 'node:crypto';
+import { safeStorage } from 'electron';
 import { FontStore } from './main/font-store';
 import { getCodingBrief } from './main/coding-brief';
 import { fontRequestSchema } from './shared/fonts';
@@ -108,15 +111,48 @@ else {
           previewBusy = false;
         }
       };
+      const connectionStore = new McpConnectionStore(app.getPath('userData'), {
+        isEncryptionAvailable: () =>
+          safeStorage.isEncryptionAvailable() &&
+          (process.platform !== 'linux' ||
+            safeStorage.getSelectedStorageBackend() !== 'basic_text'),
+        encryptString: (value) => safeStorage.encryptString(value),
+        decryptString: (value) => safeStorage.decryptString(value),
+      });
+      const openConnection = async (port: number, token: string) => {
+        const server = await startMcp(
+          service!,
+          port,
+          renderPreview,
+          fonts,
+          token,
+        );
+        try {
+          connectionStore.save(
+            new URL(server.url).port ? Number(new URL(server.url).port) : 0,
+            token,
+          );
+        } catch (error) {
+          await server.close();
+          throw error;
+        }
+        mcp = server;
+        connection = { url: server.url, token, databasePath };
+      };
       try {
-        mcp = await startMcp(service, 0, renderPreview, fonts);
-        connection = { url: mcp.url, token: mcp.token, databasePath };
+        const saved = connectionStore.load();
+        await openConnection(saved.port, saved.token);
       } catch (error) {
         connection = {
           url: null,
           token: null,
           databasePath,
-          error: String(error),
+          error:
+            error instanceof Error &&
+            'code' in error &&
+            error.code === 'EADDRINUSE'
+              ? 'The saved agent port is in use. Close the other app or reset this connection.'
+              : 'The saved agent connection could not start. Reset the connection to try again.',
         };
       }
       const trusted = (event: Electron.IpcMainInvokeEvent) => {
@@ -399,6 +435,24 @@ else {
       ipcMain.handle('design:connection', (event) => {
         trusted(event);
         return connection;
+      });
+      let resettingConnection = false;
+      ipcMain.handle('design:reset-connection', async (event) => {
+        trusted(event);
+        if (resettingConnection)
+          throw new Error('A connection reset is already running.');
+        resettingConnection = true;
+        try {
+          const token = randomBytes(32).toString('hex');
+          if (mcp) {
+            connectionStore.save(Number(new URL(mcp.url).port), token);
+            mcp.rotateToken(token);
+            connection = { url: mcp.url, token, databasePath };
+          } else await openConnection(0, token);
+          return connection;
+        } finally {
+          resettingConnection = false;
+        }
       });
       ipcMain.handle('design:workspace', (event, action: unknown) => {
         trusted(event);

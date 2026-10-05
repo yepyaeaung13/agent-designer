@@ -94,6 +94,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const [connection, setConnection] = useState<ConnectionInfo>();
+  const [resettingConnection, setResettingConnection] = useState(false);
   const [showConnection, setShowConnection] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -1003,8 +1004,26 @@ function App() {
             </div>
             <p>
               Your agent can read and edit this canvas while the app is open.
-              Use a client that supports Streamable HTTP and a bearer token.
+              Connection settings stay the same after restarting. Reset the
+              connection to disconnect old clients and get a new token.
             </p>
+            <button
+              disabled={resettingConnection}
+              onClick={async () => {
+                setResettingConnection(true);
+                try {
+                  setConnection(await window.designer.resetConnection());
+                } catch {
+                  setError(
+                    'Could not reset the connection. Your existing settings were kept.',
+                  );
+                } finally {
+                  setResettingConnection(false);
+                }
+              }}
+            >
+              {resettingConnection ? 'Resetting…' : 'Reset connection'}
+            </button>
             {connection?.url ? (
               <>
                 <label>
@@ -1042,8 +1061,8 @@ function App() {
                   Copy connection settings
                 </button>
                 <p className="muted">
-                  Connection settings change when the app restarts. Share the
-                  token only with agents you trust to edit your design.
+                  Settings stay stable until you reset them. Share the token
+                  only with agents you trust to edit your design.
                 </p>
               </>
             ) : (

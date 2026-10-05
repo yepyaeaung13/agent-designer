@@ -24,6 +24,7 @@ const api: DesignerApi = {
   workspace: (action) => ipcRenderer.invoke('design:workspace', action),
   execute: (request) => ipcRenderer.invoke('design:execute', request),
   connection: () => ipcRenderer.invoke('design:connection'),
+  resetConnection: () => ipcRenderer.invoke('design:reset-connection'),
   onChanged: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, snapshot: Snapshot) =>
       listener(snapshot);

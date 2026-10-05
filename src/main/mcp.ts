@@ -31,8 +31,10 @@ export async function startMcp(
   port = 0,
   renderer?: PreviewRenderer,
   fonts?: FontStore,
+  savedToken?: string,
 ) {
-  const token = randomBytes(32).toString('hex');
+  let token = savedToken ?? randomBytes(32).toString('hex');
+  if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('Invalid MCP token.');
   const connections = new Set<McpServer>();
   const http = createServer(async (req, res) => {
     const reject = (status: number, message: string) => {
@@ -516,7 +518,13 @@ export async function startMcp(
     throw new Error('MCP did not bind a port');
   return {
     url: `http://127.0.0.1:${address.port}/mcp`,
-    token,
+    get token() {
+      return token;
+    },
+    rotateToken(next: string) {
+      if (!/^[a-f0-9]{64}$/.test(next)) throw new Error('Invalid MCP token.');
+      token = next;
+    },
     close: async () => {
       await Promise.all([...connections].map((server) => server.close()));
       http.closeAllConnections();

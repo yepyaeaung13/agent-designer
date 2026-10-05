@@ -3,7 +3,7 @@
   "productName": "agent-designer",
   "version": "1.0.0",
   "private": true,
-  "description": "My Electron application description",
+  "description": "Local design editor and MCP handoff for design-to-code workflows",
   "keywords": [],
   "license": "MIT",
   "author": {
@@ -20,7 +20,8 @@
     "lint:fix": "oxlint --fix && oxfmt --write",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/test.cjs",
-    "rebuild": "electron-rebuild -f -w better-sqlite3"
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "retrieve-design": "node scripts/retrieve-demo-design.mjs"
   },
   "devDependencies": {
     "@electron-forge/cli": "^8.0.1",
