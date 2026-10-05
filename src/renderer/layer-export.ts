@@ -1,6 +1,7 @@
 import { ensureFonts } from './font-manager';
 import Konva from 'konva';
 import { textLayout } from './text-layout';
+import { richTextLayout } from './rich-text';
 import type { DesignNode } from '../shared/design';
 
 const escape = (value: string) =>
@@ -71,17 +72,33 @@ export async function exportSvg(
         content += `<rect width="${w}" height="${h}" fill="none"${stroke}/>`;
     } else if (node.type === 'ellipse')
       content = `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2}" ry="${h / 2}" ${fill}${stroke}/>`;
-    else if (node.type === 'text') {
+    else if (node.type === 'text' && node.textRuns?.length) {
+      content = richTextLayout(node)
+        .fragments.map((fragment) => {
+          const style = fragment.node;
+          return `<text x="${fragment.x}" y="${fragment.y + fragment.height / 2}" dominant-baseline="central" fill="${style.fill}" fill-opacity="${style.fillOpacity ?? 1}" font-family="${escape(style.fontFamily ?? 'Arial')}" font-size="${style.fontSize}" font-weight="${style.fontWeight ?? 400}" font-style="${style.fontStyle ?? 'normal'}" letter-spacing="${style.letterSpacing ?? 0}" text-decoration="${fragment.decoration ?? 'none'}" xml:space="preserve">${escape(fragment.text)}</text>`;
+        })
+        .join('');
+      if (node.textSizing === 'fixed') {
+        definitions.push(
+          `<clipPath id="${id}-text"><rect width="${w}" height="${h}"/></clipPath>`,
+        );
+        content = `<g clip-path="url(#${id}-text)">${content}</g>`;
+      }
+    } else if (node.type === 'text') {
       const fontSize = node.fontSize,
         lineHeight = node.lineHeight ?? fontSize;
       measure.font = `${node.fontStyle ?? 'normal'} ${node.fontWeight ?? 400} ${fontSize}px "${(node.fontFamily ?? 'Arial').replace(/"/g, '')}"`;
       const lines: string[] = [];
+      const wrapping = textLayout(node).wrap;
       for (const paragraph of node.text.split('\n')) {
         let line = '';
-        for (const word of paragraph.split(/(?<=\s)/)) {
+        for (const word of wrapping === 'char'
+          ? Array.from(paragraph)
+          : paragraph.split(/(?<=\s)/)) {
           const candidate = line + word;
           if (
-            textLayout(node).wrap !== 'none' &&
+            wrapping !== 'none' &&
             line &&
             measure.measureText(candidate).width +
               candidate.length * (node.letterSpacing ?? 0) >
@@ -104,6 +121,8 @@ export async function exportSvg(
             : 'start';
       const x = align === 'middle' ? w / 2 : align === 'end' ? w : 0;
       content = `<text ${fill}${stroke} font-family="${escape(node.fontFamily ?? 'Arial')}" font-size="${fontSize}" font-weight="${node.fontWeight ?? 400}" font-style="${node.fontStyle ?? 'normal'}" letter-spacing="${node.letterSpacing ?? 0}" text-anchor="${align}" xml:space="preserve">${lines.map((line, index) => `<tspan x="${x}" y="${(index + 0.5) * lineHeight}" dominant-baseline="central">${escape(line)}</tspan>`).join('')}</text>`;
+      if (node.textSizing === 'fixed')
+        content = `<g clip-path="url(#${id}-text)">${content}</g>`;
     } else
       content = `<rect width="${w}" height="${h}" rx="${node.cornerRadius}" ${fill}${stroke}/>`;
     if (node.backgroundAssetId)

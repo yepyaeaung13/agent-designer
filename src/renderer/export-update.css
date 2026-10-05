@@ -1,0 +1,49 @@
+.export-update-dialog {
+  width: min(760px, 90vw);
+  max-height: 85vh;
+  overflow: auto;
+}
+.export-update-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  padding: 12px 0;
+  border-block: 1px solid var(--border, #777);
+}
+.export-update-counts dd {
+  margin: 4px 0 0;
+  font-size: 20px;
+}
+.export-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+.export-identity input {
+  width: auto;
+}
+.export-conflict {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border, #777);
+  display: grid;
+  gap: 8px;
+}
+.export-conflict-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.export-conflict-values pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 130px;
+  overflow: auto;
+  font: inherit;
+  margin: 4px 0;
+}
+.export-update-dialog p,
+.export-conflict strong,
+.export-conflict span {
+  overflow-wrap: anywhere;
+}

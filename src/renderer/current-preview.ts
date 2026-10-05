@@ -1,6 +1,7 @@
 import { fontStack, resolveFonts, textOverflow } from './font-manager';
 import Konva from 'konva';
 import { textLayout } from './text-layout';
+import { richTextGroup } from './rich-text';
 import { canvasEffects } from './effect-controls';
 import type { PreviewRenderInput } from '../main/current-preview';
 
@@ -99,6 +100,8 @@ async function renderCurrentPreview(input: PreviewRenderInput) {
           radiusY: node.height / 2,
         }),
       );
+    else if (node.type === 'text' && node.textRuns?.length)
+      content.add(richTextGroup(node));
     else if (node.type === 'text')
       content.add(
         new Konva.Text({

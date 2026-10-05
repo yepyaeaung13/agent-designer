@@ -1,9 +1,11 @@
 import { layoutItemSchema } from './layout-item';
 import { gridSchema } from './grid';
+import { textRunSchema } from './text-runs';
 import type { FontImport, LocalFont } from './fonts';
+import type { ExportReview } from './figma-update';
 import { z } from 'zod';
 
-export const nodeSchema = z
+const nodeBaseSchema = z
   .object({
     id: z.string().uuid(),
     parentId: z.string().uuid().nullable(),
@@ -27,6 +29,9 @@ export const nodeSchema = z
     lineHeight: z.number().positive().optional(),
     letterSpacing: z.number().finite().optional(),
     textAlign: z.enum(['left', 'center', 'right', 'justify']).optional(),
+    textSizing: z.enum(['auto-width', 'auto-height', 'fixed']).optional(),
+    textWrap: z.enum(['none', 'word', 'char']).optional(),
+    textRuns: z.array(textRunSchema).max(10000).optional(),
     fillOpacity: z.number().min(0).max(1).optional(),
     stroke: z
       .string()
@@ -83,6 +88,31 @@ export const nodeSchema = z
       .optional(),
   })
   .strict();
+export const nodeSchema = nodeBaseSchema.superRefine((node, context) => {
+  let end = 0;
+  for (const run of node.textRuns ?? []) {
+    const splitSurrogate = (index: number) =>
+      index > 0 &&
+      index < node.text.length &&
+      /[\uD800-\uDBFF]/.test(node.text[index - 1]) &&
+      /[\uDC00-\uDFFF]/.test(node.text[index]);
+    if (
+      node.type !== 'text' ||
+      run.start < end ||
+      run.end <= run.start ||
+      run.end > node.text.length ||
+      splitSurrogate(run.start) ||
+      splitSurrogate(run.end)
+    )
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Text runs must be ordered, non-overlapping UTF-16 ranges within a text layer.',
+        path: ['textRuns'],
+      });
+    end = run.end;
+  }
+});
 
 export type DesignNode = z.infer<typeof nodeSchema>;
 export const legacyDocumentSchema = z
@@ -124,7 +154,7 @@ export const documentSchema = z
   })
   .strict();
 export type DesignDocument = z.infer<typeof documentSchema>;
-export const patchSchema = nodeSchema
+export const patchSchema = nodeBaseSchema
   .omit({ id: true, parentId: true, type: true })
   .partial();
 export const commandSchema = z.discriminatedUnion('type', [
@@ -214,6 +244,9 @@ export type ConnectionInfo = {
   error?: string;
 };
 export interface DesignerApi {
+  handoffReadiness(
+    input: import('./handoff-readiness').HandoffScope,
+  ): Promise<import('./handoff-readiness').HandoffReadiness>;
   listFonts(): Promise<LocalFont[]>;
   fontData(id: string): Promise<string>;
   importFont(input: FontImport): Promise<LocalFont | null>;
@@ -226,6 +259,16 @@ export interface DesignerApi {
   copyText(text: string): Promise<void>;
   importFigma(input: { url: string; token: string }): Promise<Snapshot>;
   importBundle(): Promise<Snapshot | null>;
+  reviewExportUpdate(input: {
+    documentId: string;
+    expectedRevision: number;
+  }): Promise<ExportReview | null>;
+  applyExportUpdate(input: {
+    reviewId: string;
+    choices: Record<string, 'local' | 'export'>;
+    confirmUnverifiedSource: boolean;
+  }): Promise<Snapshot>;
+  discardExportUpdate(reviewId: string): Promise<void>;
   asset(documentId: string, assetId: string): Promise<string>;
   read(): Promise<Snapshot>;
   workspace(action: WorkspaceAction): Promise<Snapshot>;

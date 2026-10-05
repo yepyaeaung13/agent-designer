@@ -9,6 +9,8 @@ const result = spawnSync(
     'tests/document.test.ts',
     'tests/figma.test.ts',
     'tests/bundle.test.ts',
+    'tests/offline-handoff.test.ts',
+    'tests/figma-sync.test.ts',
     'tests/spacing.test.ts',
     'tests/coding-brief.test.ts',
     'tests/current-preview.test.ts',
@@ -20,6 +22,7 @@ const result = spawnSync(
     'tests/layout-item.test.ts',
     'tests/auto-layout.test.ts',
     'tests/text-measurement.test.ts',
+    'tests/rich-text.test.ts',
     'tests/grid-layout.test.ts',
   ],
   {

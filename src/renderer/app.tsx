@@ -3,6 +3,7 @@ import { LayoutControls } from './layout-controls';
 import './live-layout';
 import { FontControls } from './font-controls';
 import { textLayout } from './text-layout';
+import { RichText } from './rich-text';
 import {
   ensureFonts,
   fontStack,
@@ -36,6 +37,7 @@ import {
   type Snapshot,
   type ConnectionInfo,
   type WorkspaceAction,
+  type DesignerApi,
 } from '../shared/design';
 import { WorkspaceControls } from './workspace-controls';
 import {
@@ -224,6 +226,29 @@ function App() {
       setBusy(false);
     }
   }
+  async function applyExportUpdate(
+    input: Parameters<DesignerApi['applyExportUpdate']>[0],
+  ) {
+    if (pending.current) return false;
+    pending.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      accept(await window.designer.applyExportUpdate(input));
+      return true;
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+      try {
+        accept(await window.designer.read());
+      } catch {
+        /* Keep the last snapshot. */
+      }
+      return false;
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
+  }
   async function workspace(action: WorkspaceAction) {
     if (pending.current) return false;
     pending.current = true;
@@ -390,6 +415,8 @@ function App() {
                   stroke={node.stroke}
                   strokeWidth={node.strokeWidth}
                 />
+              ) : node.type === 'text' && node.textRuns?.length ? (
+                <RichText key={fontsVersion} node={node} />
               ) : node.type === 'text' ? (
                 <Text
                   key={fontsVersion}
@@ -478,14 +505,15 @@ function App() {
           >
             {theme === 'dark' ? '☀ Light' : '☾ Dark'}
           </button>
-          <FigmaImportButton busy={busy} onImport={importFigma} />
           <button
+            className="primary"
             disabled={busy}
             onClick={() => void importBundle()}
             title="Import a file saved by the Agent Designer Figma plugin"
           >
             Import export file
           </button>
+          <FigmaImportButton busy={busy} onImport={importFigma} />
           <button
             className="agent-button"
             onClick={() => setShowConnection(true)}
@@ -515,7 +543,12 @@ function App() {
           </div>
         </aside>
         <main className="canvas-column">
-          <FigmaReference snapshot={snapshot} selection={selection} />
+          <FigmaReference
+            snapshot={snapshot}
+            selection={selection}
+            busy={busy}
+            applyUpdate={applyExportUpdate}
+          />
           <CodingHandoff snapshot={snapshot} selection={selection} />
           <FontControls nodes={page?.nodes ?? []} />
           <div className="toolbar">

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { Snapshot } from '../shared/design';
 import { codingPrompt, type CodingTarget } from '../shared/coding-handoff';
 import './coding-handoff.css';
+import type { HandoffReadiness } from '../shared/handoff-readiness';
+import { onFontsChanged } from './font-manager';
 
 export function CodingHandoff({
   snapshot,
@@ -15,16 +17,62 @@ export function CodingHandoff({
   const [target, setTarget] = useState<CodingTarget>('existing');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+  const [opened, setOpened] = useState(false);
+  const [fontVersion, setFontVersion] = useState(0);
+  const [readiness, setReadiness] = useState<HandoffReadiness>();
+  const [checking, setChecking] = useState(false);
   const document = snapshot?.document;
   const page = document?.pages.find(
     (item) => item.id === snapshot?.activePageId,
   );
   const selected = page?.nodes.find((node) => node.id === nodeId);
+  useEffect(
+    () =>
+      onFontsChanged(() => {
+        setFontVersion((version) => version + 1);
+        setCopied(false);
+      }),
+    [],
+  );
+  useEffect(() => {
+    if (!opened || !document || !page || !selected) return;
+    let active = true;
+    setChecking(true);
+    setReadiness(undefined);
+    setError('');
+    window.designer
+      .handoffReadiness({
+        documentId: document.id,
+        pageId: page.id,
+        nodeId: selected.id,
+        expectedRevision: document.revision,
+      })
+      .then((result) => {
+        if (active) setReadiness(result);
+      })
+      .catch((error) => {
+        if (active) setError(String(error));
+      })
+      .finally(() => {
+        if (active) setChecking(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    opened,
+    document?.id,
+    document?.revision,
+    page?.id,
+    selected?.id,
+    fontVersion,
+  ]);
   useEffect(() => {
     setCopied(false);
   }, [nodeId, target, document?.revision]);
   useEffect(() => {
     dialog.current?.close();
+    setOpened(false);
     setError('');
   }, [document?.id, page?.id]);
   if (!document || !page) return null;
@@ -41,11 +89,20 @@ export function CodingHandoff({
     );
     setCopied(false);
     setError('');
+    setOpened(true);
     dialog.current?.showModal();
   }
   async function copy() {
     if (!selected) return;
     try {
+      setReadiness(
+        await window.designer.handoffReadiness({
+          documentId: document!.id,
+          pageId: page!.id,
+          nodeId: selected.id,
+          expectedRevision: document!.revision,
+        }),
+      );
       await window.designer.copyText(
         codingPrompt({
           documentId: document!.id,
@@ -69,7 +126,11 @@ export function CodingHandoff({
           Send design to agent
         </button>
       </div>
-      <dialog ref={dialog} className="workspace-dialog coding-handoff-dialog">
+      <dialog
+        ref={dialog}
+        onClose={() => setOpened(false)}
+        className="workspace-dialog coding-handoff-dialog"
+      >
         <div className="modal-heading">
           <h2>Send design to agent</h2>
           <button
@@ -112,6 +173,39 @@ export function CodingHandoff({
           agent will retrieve the design, required images, fonts and import
           notes through MCP.
         </p>
+        <section className="handoff-readiness" aria-live="polite">
+          <strong>
+            {checking
+              ? 'Checking local files...'
+              : readiness?.status === 'ready'
+                ? 'Local files ready'
+                : readiness
+                  ? 'Local files need attention'
+                  : 'Local check unavailable'}
+          </strong>
+          {readiness && (
+            <>
+              <p>
+                {readiness.imageCount} local images · {readiness.localFontCount}{' '}
+                transferable font variants
+              </p>
+              {readiness.issues.length > 0 && (
+                <>
+                  <ul>
+                    {readiness.issues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                  <p className="muted">
+                    Load font files using Manage fonts. You can still copy the
+                    brief with these warnings; missing files will not be fetched
+                    from Figma.
+                  </p>
+                </>
+              )}
+            </>
+          )}
+        </section>
         {stale && (
           <p className="handoff-note">
             Edited since import. The original reference does not show these
@@ -142,7 +236,7 @@ export function CodingHandoff({
           <button onClick={() => dialog.current?.close()}>Close</button>
           <button
             className="primary"
-            disabled={!selected}
+            disabled={!selected || checking || !readiness}
             onClick={() => void copy()}
           >
             {copied ? 'Coding brief copied' : 'Copy coding brief'}

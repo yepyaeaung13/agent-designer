@@ -15,11 +15,13 @@ import {
   type Snapshot,
 } from '../shared/design';
 
-type History = { undo: DesignDocument[]; redo: DesignDocument[] };
+type HistoryEntry = { document: DesignDocument; source: unknown };
+type History = { undo: HistoryEntry[]; redo: HistoryEntry[] };
 export class DocumentService extends EventEmitter {
   private db: Database.Database;
   private documents = new Map<string, DesignDocument>();
   private histories = new Map<string, History>();
+  private sourceStates = new Map<string, unknown>();
   private activeId = '';
   private pages: Record<string, string> = {};
   private sequence = 0;
@@ -275,6 +277,7 @@ export class DocumentService extends EventEmitter {
     if (action.type === 'delete_document') {
       this.documents.delete(action.id);
       this.histories.delete(action.id);
+      this.sourceStates.delete(action.id);
     }
     this.activeId = activeId;
     this.pages = pages;
@@ -313,11 +316,14 @@ export class DocumentService extends EventEmitter {
       throw new Error('The design changed. Refresh and try again.');
     const history = this.history(documentId);
     const previous = structuredClone(document);
+    const previousSource = this.sourceState(documentId);
+    let nextSource = previousSource;
     let next = structuredClone(previous);
     if (command.type === 'undo' || command.type === 'redo') {
       const stack = history[command.type];
       if (!stack.length) return () => this.read(documentId);
-      next = structuredClone(stack[stack.length - 1]);
+      next = structuredClone(stack[stack.length - 1].document);
+      nextSource = stack[stack.length - 1].source;
     } else if (command.type === 'rename') next.name = command.name;
     else if (command.type === 'create_page')
       next.pages.push({ id: command.id, name: command.name, nodes: [] });
@@ -359,8 +365,15 @@ export class DocumentService extends EventEmitter {
       else {
         const node = page.nodes.find((item) => item.id === command.id);
         if (!node) throw new Error('Node not found on this page.');
-        if (command.type === 'update') Object.assign(node, command.patch);
-        else {
+        if (command.type === 'update') {
+          if (
+            command.patch.text !== undefined &&
+            command.patch.text !== node.text &&
+            command.patch.textRuns === undefined
+          )
+            delete node.textRuns;
+          Object.assign(node, command.patch);
+        } else {
           const deleted = new Set([command.id]);
           let count = 0;
           while (count !== deleted.size) {
@@ -406,20 +419,23 @@ export class DocumentService extends EventEmitter {
       };
       this.db.transaction(() => {
         this.persist(next);
+        if (command.type === 'undo' || command.type === 'redo')
+          this.persistSource(documentId, nextSource);
         this.saveWorkspace(this.activeId, pages);
       })();
       if (command.type === 'undo') {
         history.undo.pop();
-        history.redo.push(previous);
+        history.redo.push({ document: previous, source: previousSource });
       } else if (command.type === 'redo') {
         history.redo.pop();
-        history.undo.push(previous);
+        history.undo.push({ document: previous, source: previousSource });
       } else {
-        history.undo.push(previous);
+        history.undo.push({ document: previous, source: previousSource });
         history.redo = [];
       }
       if (history.undo.length > 100) history.undo.shift();
       this.documents.set(documentId, next);
+      this.sourceStates.set(documentId, nextSource);
       this.pages = pages;
       this.notify();
       return this.read(documentId);
@@ -432,12 +448,94 @@ export class DocumentService extends EventEmitter {
       )
       .run(document.id, JSON.stringify(document), new Date().toISOString());
   }
+  private persistSource(documentId: string, source: unknown) {
+    if (source === null || source === undefined)
+      this.db
+        .prepare('DELETE FROM import_sources WHERE document_id=?')
+        .run(documentId);
+    else
+      this.db
+        .prepare(
+          'INSERT INTO import_sources VALUES (?, ?) ON CONFLICT(document_id) DO UPDATE SET content=excluded.content',
+        )
+        .run(documentId, JSON.stringify(source));
+  }
+  async updateImportedDocument(
+    documentId: string,
+    expectedRevision: number,
+    input: DesignDocument,
+    raw: unknown,
+    assets: { id: string; mimeType: string; bytes: Buffer; role: string }[],
+  ) {
+    const previous = structuredClone(this.get(documentId));
+    if (previous.revision !== expectedRevision)
+      throw new Error('The design changed. Review the export again.');
+    const previousSource = this.sourceState(documentId);
+    const nextSource = structuredClone(raw);
+    let next = documentSchema.parse(input);
+    if (
+      next.id !== documentId ||
+      next.revision !== expectedRevision + 1 ||
+      !next.source
+    )
+      throw new Error('Invalid imported update.');
+    validateTree(next);
+    for (const page of next.pages) {
+      if (!page.nodes.some((node) => node.layout?.enabled)) continue;
+      const oldNodes =
+        previous.pages.find((old) => old.id === page.id)?.nodes ?? [];
+      if (JSON.stringify(page.nodes) === JSON.stringify(oldNodes)) continue;
+      if (this.layoutRecalculator)
+        page.nodes = await this.layoutRecalculator(
+          structuredClone(page.nodes),
+          structuredClone(oldNodes),
+        );
+      else recalculateAutoLayout(page.nodes, oldNodes);
+    }
+    next = documentSchema.parse(next);
+    validateTree(next);
+    if (this.get(documentId).revision !== expectedRevision)
+      throw new Error(
+        'The design changed during layout measurement. Review the export again.',
+      );
+    const ids = new Set([
+      ...this.listAssets(documentId).map((asset) => asset.id),
+      ...assets.map((asset) => asset.id),
+    ]);
+    if (!ids.has(next.source!.previewAssetId))
+      throw new Error('Missing updated reference.');
+    for (const page of next.pages)
+      for (const node of page.nodes)
+        for (const id of [node.assetId, node.backgroundAssetId])
+          if (id && !ids.has(id)) throw new Error('Missing updated asset.');
+    this.db.transaction(() => {
+      this.persist(next);
+      this.persistSource(documentId, nextSource);
+      for (const asset of assets) {
+        this.db
+          .prepare('INSERT OR IGNORE INTO assets VALUES (?, ?, ?)')
+          .run(asset.id, asset.mimeType, asset.bytes);
+        this.db
+          .prepare('INSERT OR IGNORE INTO document_assets VALUES (?, ?, ?)')
+          .run(documentId, asset.id, asset.role);
+      }
+    })();
+    const history = this.history(documentId);
+    history.undo.push({ document: previous, source: previousSource });
+    if (history.undo.length > 100) history.undo.shift();
+    history.redo = [];
+    this.documents.set(documentId, next);
+    this.sourceStates.set(documentId, nextSource);
+    this.notify();
+    return this.read(documentId);
+  }
   importDocument(
     input: DesignDocument,
     raw: unknown,
     assets: { id: string; mimeType: string; bytes: Buffer; role: string }[],
   ) {
     const document = documentSchema.parse(input);
+    const savedSource = structuredClone(raw);
     validateTree(document);
     if (this.documents.has(document.id))
       throw new Error('Imported document already exists.');
@@ -457,7 +555,7 @@ export class DocumentService extends EventEmitter {
       this.persist(document);
       this.db
         .prepare('INSERT INTO import_sources VALUES (?, ?)')
-        .run(document.id, JSON.stringify(raw));
+        .run(document.id, JSON.stringify(savedSource));
       for (const asset of assets) {
         this.db
           .prepare('INSERT OR IGNORE INTO assets VALUES (?, ?, ?)')
@@ -469,6 +567,7 @@ export class DocumentService extends EventEmitter {
       this.saveWorkspace(document.id, pages);
     })();
     this.documents.set(document.id, document);
+    this.sourceStates.set(document.id, savedSource);
     this.activeId = document.id;
     this.pages = pages;
     this.notify();
@@ -505,11 +604,18 @@ export class DocumentService extends EventEmitter {
     }[];
   }
   getSource(documentId: string): unknown {
+    return structuredClone(this.sourceState(documentId));
+  }
+  private sourceState(documentId: string): unknown {
     this.get(documentId);
+    if (this.sourceStates.has(documentId))
+      return this.sourceStates.get(documentId);
     const row = this.db
       .prepare('SELECT content FROM import_sources WHERE document_id=?')
       .get(documentId) as { content: string } | undefined;
-    return row ? JSON.parse(row.content) : null;
+    const source = row ? JSON.parse(row.content) : null;
+    this.sourceStates.set(documentId, source);
+    return source;
   }
   close() {
     this.db.close();

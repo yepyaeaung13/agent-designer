@@ -3,6 +3,8 @@ import { Image as CanvasImage, Rect } from 'react-konva';
 import type { Snapshot } from '../shared/design';
 import { useShadowImageReady } from './shadow-group';
 import type { canvasEffects } from './effect-controls';
+import { ExportUpdate } from './export-update';
+import type { DesignerApi } from '../shared/design';
 import './figma.css';
 
 export function AssetImage({
@@ -111,7 +113,7 @@ export function FigmaImportButton({
           ref.current?.showModal();
         }}
       >
-        ↓ Import Figma
+        Import via API
       </button>
       <dialog
         ref={ref}
@@ -128,7 +130,7 @@ export function FigmaImportButton({
           }}
         >
           <div className="eyebrow">FIGMA → YOUR LOCAL WORKSPACE</div>
-          <h2>Bring a frame into your app</h2>
+          <h2>Import via Figma API</h2>
           <p>
             Import the layers, source properties, assets and a reference image.
             Your existing documents stay in place.
@@ -195,9 +197,15 @@ export function FigmaImportButton({
 
 export function FigmaReference({
   snapshot,
+  busy,
+  applyUpdate,
 }: {
   snapshot?: Snapshot;
   selection: string | null;
+  busy: boolean;
+  applyUpdate: (
+    input: Parameters<DesignerApi['applyExportUpdate']>[0],
+  ) => Promise<boolean>;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [image, setImage] = useState('');
@@ -234,6 +242,7 @@ export function FigmaReference({
         </span>
         <div>
           <button onClick={() => void show()}>Reference & notes</button>
+          <ExportUpdate snapshot={snapshot} busy={busy} apply={applyUpdate} />
         </div>
       </div>
       <dialog ref={dialog} className="workspace-dialog reference-dialog">

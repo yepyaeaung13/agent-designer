@@ -36,6 +36,13 @@
   padding: 5px 8px;
   font-size: 11px;
 }
+.figma-reference-bar > div {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .reference-dialog {
   width: min(1200px, 92vw);
   height: 85vh;

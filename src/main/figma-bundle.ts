@@ -40,7 +40,7 @@ const schema = z
   })
   .strict();
 
-export function importFigmaBundle(service: DocumentService, bytes: Buffer) {
+export function parseFigmaBundle(bytes: Buffer) {
   if (bytes.length > bundleLimit)
     throw new Error('Export file exceeds 100 MB. Choose a smaller frame.');
   const bundle = schema.parse(JSON.parse(bytes.toString('utf8')));
@@ -122,9 +122,9 @@ export function importFigmaBundle(service: DocumentService, bytes: Buffer) {
     imageAssets,
   );
   document.source!.warnings.push(...bundle.warnings);
-  return service.importDocument(
+  return {
     document,
-    {
+    raw: {
       response: {
         name: root.name,
         version: document.source!.version,
@@ -133,7 +133,16 @@ export function importFigmaBundle(service: DocumentService, bytes: Buffer) {
       renderAssets,
       imageAssets,
       transport: 'plugin',
+      baseline: {
+        pageId: document.pages[0].id,
+        nodes: document.pages[0].nodes,
+      },
     },
     assets,
-  );
+  };
+}
+
+export function importFigmaBundle(service: DocumentService, bytes: Buffer) {
+  const { document, raw, assets } = parseFigmaBundle(bytes);
+  return service.importDocument(document, raw, assets);
 }

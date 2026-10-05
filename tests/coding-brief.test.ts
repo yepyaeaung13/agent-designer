@@ -5,6 +5,68 @@ import { makeNode, type DesignDocument } from '../src/shared/design';
 import { getCodingBrief } from '../src/main/coding-brief';
 import { codingPrompt } from '../src/shared/coding-handoff';
 
+test('local readiness is scoped, read-only, and checks visibility at the exact revision', () => {
+  const service = new DocumentService(':memory:');
+  try {
+    const root = makeNode('frame');
+    const hidden = { ...makeNode('frame'), parentId: root.id, visible: false };
+    const document: DesignDocument = {
+      schemaVersion: 3,
+      id: crypto.randomUUID(),
+      name: 'Local',
+      revision: 0,
+      pages: [
+        {
+          id: crypto.randomUUID(),
+          name: 'Page',
+          nodes: [
+            root,
+            hidden,
+            {
+              ...makeNode('image'),
+              parentId: hidden.id,
+              assetId: 'a'.repeat(64),
+            },
+            { ...makeNode('text'), fontFamily: 'Unrelated font' },
+          ],
+        },
+      ],
+    };
+    const saved = service.read().document;
+    for (const node of document.pages[0].nodes) {
+      service.execute({
+        documentId: saved.id,
+        pageId: saved.pages[0].id,
+        expectedRevision: service.read().document.revision,
+        command: { type: 'create', node },
+      });
+    }
+    const scope = {
+      documentId: saved.id,
+      pageId: saved.pages[0].id,
+      nodeId: root.id,
+      expectedRevision: 4,
+    };
+    const before = JSON.stringify(service.read());
+    assert.deepEqual(getCodingBrief(service, scope).readiness, {
+      status: 'ready',
+      imageCount: 0,
+      localFontCount: 0,
+      issues: [],
+    });
+    assert.deepEqual(
+      getCodingBrief(service, { ...scope, nodeId: hidden.id }).readiness.issues,
+      ['The selected scope has no visible layers.'],
+    );
+    assert.throws(() =>
+      getCodingBrief(service, { ...scope, expectedRevision: 1 }),
+    );
+    assert.equal(JSON.stringify(service.read()), before);
+  } finally {
+    service.close();
+  }
+});
+
 test('coding brief covers large subtrees, excludes unrelated and hidden assets, and reports reference freshness', () => {
   const service = new DocumentService(':memory:');
   try {
@@ -75,6 +137,14 @@ test('coding brief covers large subtrees, excludes unrelated and hidden assets, 
     };
     const before = JSON.stringify(service.read());
     const brief = getCodingBrief(service, args);
+    assert.equal(brief.readiness.status, 'needs-attention');
+    assert.equal(brief.readiness.imageCount, 1);
+    assert.equal(brief.readiness.localFontCount, 0);
+    assert.ok(
+      brief.readiness.issues.some((issue) =>
+        issue.includes('Plus Jakarta Sans'),
+      ),
+    );
     assert.equal(brief.layerCount, 210);
     assert.equal(brief.hiddenLayerCount, 2);
     assert.deepEqual(
@@ -149,6 +219,10 @@ test('local designs have a usable brief without an imported preview and report m
     assert.equal(brief.preview.available, false);
     assert.equal('retrieve' in brief.preview, false);
     assert.deepEqual(brief.missingAssetIds, ['e'.repeat(64)]);
+    assert.equal(brief.readiness.status, 'needs-attention');
+    assert.ok(
+      brief.readiness.issues.includes(`Missing local image: ${'e'.repeat(64)}`),
+    );
     assert.equal(brief.context.arguments.expectedRevision, 1);
     assert(
       brief.warnings.some((warning) => warning.includes('missing assets')),

@@ -1,6 +1,6 @@
 # Agent Designer
 
-A local Electron + React design editor with SQLite persistence and a local MCP server.
+A local Electron + React design editor with SQLite persistence and a local MCP server. Export from Figma once, then use the saved local design for coding-agent development without repeated Figma API requests.
 
 ## Run
 
@@ -41,15 +41,19 @@ Select a frame before adding a shape or text to place it inside that frame. Coor
 
 SQLite resides at Electron's userData directory as `designer.sqlite`. Version 3 stores documents as `{ schemaVersion: 3, id, name, revision, pages: [{ id, name, nodes }], source? }`. Nodes remain independent of the renderer. Page IDs and node IDs are unique within a document, and parents must belong to the same page. Revision checks apply to the entire document. Imported source JSON lives in `import_sources`; image/vector bytes live in `assets`, linked through `document_assets`. Asset IDs are SHA-256 hashes. Everything needed for the handoff is local after import.
 
-On first launch after upgrading, v1 canvas data moves into a page named **Page 1**, and v2 pages upgrade in place. IDs, names, revisions, and nodes are preserved. Original pre-migration JSON is retained in `document_backups`. Migration is transactional: invalid data rolls back without replacing the original document. Workspace selection is stored separately from undoable design changes. Project folders, editable component systems, variable resolution, full text/grid layout, re-import synchronization and durable undo history remain future milestones.
+On first launch after upgrading, v1 canvas data moves into a page named **Page 1**, and v2 pages upgrade in place. IDs, names, revisions, and nodes are preserved. Original pre-migration JSON is retained in `document_backups`. Migration is transactional: invalid data rolls back without replacing the original document. Workspace selection is stored separately from undoable design changes. Project folders, editable component systems, variable resolution, full text/grid layout and durable undo history remain future milestones.
 
 ## Figma → app → MCP → coding agent
 
+The primary workflow is the token-free [Figma export plugin](figma-plugin/README.md). Export a selected frame to `.agentdesign.json`, then use **Import export file** in the app. Layers, original properties, reference and images are saved locally and remain available after restarting. Connect an agent and copy a coding brief; its instructions use local MCP tools and avoid Figma API/MCP and remote source URLs. Load needed font files separately through Manage fonts. Missing assets/fonts remain explicit handoff limitations.
+
+**Import via API** is an optional alternative and still uses Figma REST requests and their limits. The steps below describe that alternative:
+
 1. Select a frame in Figma and copy its link (including `node-id`).
-2. Click **Import Figma** in Agent Designer. Paste the link and a Figma personal access token with `file_content:read` permission. The token must have access to the file; it is not saved, logged, or sent to image hosts.
+2. Click **Import via API** in Agent Designer. Paste the link and a Figma personal access token with `file_content:read` permission. The token must have access to the file; it is not saved, logged, or sent to image hosts.
 3. The importer creates a new local document. It keeps the frame hierarchy, text and typography, layout metadata, source node/component IDs, and the original Figma node response. It downloads a frame reference PNG, rendered complex layers, vector SVGs, and source images.
 4. Open **Reference & notes** to compare the editable canvas with the original frame and inspect conversion limitations.
-5. Connect the coding agent to this app's MCP server, select a frame/layer, and click **Send design to agent**, choose a frame and target, then **Copy coding brief**. Paste the prompt into an agent running in your target repository.
+5. Connect the coding agent to this app's MCP server, select a frame/layer, and click **Send design to agent**, choose a frame and target, review the local file check, then **Copy coding brief**. Paste the prompt into an agent running in your target repository. Missing images and unavailable/invalid font files appear in both the dialog and MCP brief. Installed fonts are not transferable without a local font file; warnings do not prevent copying. Checks refresh after design or font changes and are repeated before copying, without Figma requests.
 6. The agent reads context, fetches the reference and required assets, implements using the repository's own components/styles, and visually verifies the result.
 
 The importer currently handles one frame per import, up to 2,000 source nodes, 64 hierarchy levels, 80 complex layers, 80 source images, 12 MB per asset and 64 MB of assets total. A failed import does not create a partial document. Figma API rate limits and file permissions still apply. No `.fig` file parsing or OAuth account connection is included yet.
@@ -90,6 +94,18 @@ Import references: [Figma file endpoints](https://developers.figma.com/docs/rest
 
 ## Verification
 
+The offline handoff test imports a token-free bundle, reopens SQLite and the font library, retrieves scoped context/assets/fonts/reference through an authenticated local MCP client, then edits and verifies revision-bound changes. All external fetch requests are blocked. Its current-preview renderer is a test stub; `scripts/bundle-smoke.cjs` separately exercises the real import UI, decoded reference and copied local-only prompt with external HTTP requests blocked.
+
+## Updating From A New Export
+
+Export the same frame again with the Figma plugin, then choose **Update from export** beside **Reference & notes**. Review source additions, removals and updates, choose local or export values for conflicts, and apply. Known file keys and the source frame ID must match. If the plugin omits the file key, explicitly confirm that the export is from the same Figma file.
+
+The update compares the last imported baseline, current saved layers and new export. Independent changes merge; conflicts default to local values. Text and styled ranges resolve together. Competing additions, deletions, reparenting, type changes and ordering use a single hierarchy choice; choosing export hierarchy can remove local additions inside that frame. Document/page names, unrelated pages and layers remain local. Surviving source layers retain their UUIDs so existing agent baselines remain useful.
+
+Updates use one revision and SQLite transaction. Source properties, reference, assets and normalized baseline update together; session undo/redo restores both design and import metadata. Asset bytes remain available for undo and retained local layers. Live layouts recalculate through the normal measurement engine before committing; invalid layouts and stale reviews reject without saving. A retained local difference marks the newest Figma reference stale. Legacy imports reconstruct a baseline from stored source properties when their imported page can be identified. Updating a deleted imported page is unsupported; import a new document instead. This workflow makes no Figma API requests and does not update generated code automatically.
+
+The bundle smoke test also exercises update review, cancellation, conflict selection, independent local edits, stable IDs, added layers, undo/redo, stale revisions and missing-file-key confirmation. It temporarily shows its isolated fixture window for modal checks and restores the clipboard on completion. No user design database is touched.
+
 `npm test` uses isolated databases and a synthetic Figma response to cover migrations, import rollback, node mapping, offline reopen, authentication, asset scoping, and coding-client MCP retrieval. After `npm run package`, `electron scripts/figma-smoke.cjs --smoke-test` exercises the actual import form, canvas, preview and coding-prompt clipboard path against that fixture. `scripts/smoke.cjs` checks document/page controls. Fixture tests are separate from a live Figma REST import, which requires a user's token.
 
 ## Current design preview
@@ -105,6 +121,10 @@ Coding briefs include a versioned changeTracking.baseline with SHA-256 fingerpri
 A revision can advance because another frame changed while this scope remains unchanged. Fingerprints survive app restarts because the agent stores the baseline locally. They are client-supplied comparisons, not persisted server revision history, historical field values, or a guarantee that generated code matches the design. Always retrieve current context and the revision-bound preview and verify code before replacing the baseline. The app does not automatically edit or overwrite generated code.
 
 ## Local design fonts
+
+Mixed text styles now use optional ordered `textRuns` with UTF-16 start/end offsets and per-range font family, size, weight, style, line height, spacing, solid color/opacity and decoration. Imports normalize Figma override tables; the typography inspector edits, adds and removes styled ranges. Canvas, current previews, SVG export and live measurement share range layout. Font manifests include the actual range variants. Replacing the text clears old ranges unless the command supplies replacement ranges; undo restores them. Old documents remain unchanged. Complex shaping, bidi, justification, paragraph spacing, gradient text and precise mixed-size baseline alignment remain approximate; consult the original Figma reference.
+
+Text layers support explicit auto-width, auto-height and fixed-box rendering, plus word, character or no wrapping in the typography inspector. Figma textAutoResize is preserved during import; auto-width renders without wrapping and fixed boxes limit rendered text to their saved height. Documents without these fields retain legacy height-based inference. Saved geometry remains the selection box; opt-in live auto-layout controls geometry recalculation. Canvas, current previews and exports use the same settings, and MCP node context includes them. Figma truncation currently maps to a fixed box without an ellipsis.
 
 Manage fonts shows requested families/weights/styles for the current page. Missing fonts are detected by loading a local font face, rather than document.fonts.check (which can succeed for fallback). Installed family detection does not guarantee every variant or glyph. Load TTF, OTF, WOFF or WOFF2 files with the matching family, weight (or variable range such as 100 900), and style. The app copies them into its user-data local-fonts library and loads them after restart. Remove a library entry to return to installed/fallback fonts; original files are untouched.
 

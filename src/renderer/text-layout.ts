@@ -5,7 +5,10 @@ import Konva from 'konva';
 export function textLayout(node: DesignNode) {
   const lineHeight = node.lineHeight ?? node.fontSize;
   const singleLine =
-    !node.text.includes('\n') && node.height < lineHeight * 1.5;
+    node.textSizing === 'auto-width' ||
+    (!node.textSizing &&
+      !node.text.includes('\n') &&
+      node.height < lineHeight * 1.5);
   let x = 0;
   if (
     singleLine &&
@@ -23,9 +26,12 @@ export function textLayout(node: DesignNode) {
   }
   return {
     width: singleLine ? undefined : node.width,
-    height: undefined,
+    height: node.textSizing === 'fixed' ? node.height : undefined,
     x,
-    wrap: singleLine ? 'none' : 'word',
+    wrap:
+      node.textSizing === 'auto-width'
+        ? 'none'
+        : (node.textWrap ?? (singleLine ? 'none' : 'word')),
     lineHeight: lineHeight / node.fontSize,
   };
 }

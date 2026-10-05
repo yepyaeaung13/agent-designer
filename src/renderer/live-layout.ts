@@ -1,6 +1,7 @@
 import type { DesignNode } from '../shared/design';
 import { recalculateAutoLayout } from '../shared/auto-layout';
 import Konva from 'konva';
+import { richTextLayout } from './rich-text';
 import { fontStack, resolveFonts } from './font-manager';
 
 export async function recalculateLiveLayout(
@@ -34,6 +35,10 @@ export async function recalculateLiveLayout(
   await document.fonts.ready;
   const cache = new Map<string, { width: number; height: number }>();
   recalculateAutoLayout(nodes, previous, (node, axis) => {
+    if (node.textRuns?.length) {
+      const result = richTextLayout(node, axis === 'width');
+      return { width: result.width, height: result.height };
+    }
     const natural = axis === 'width';
     const key = JSON.stringify([
       node.text,
@@ -44,14 +49,20 @@ export async function recalculateLiveLayout(
       node.fontSize,
       node.lineHeight,
       node.letterSpacing,
+      node.textSizing,
+      node.textWrap,
       natural,
     ]);
     const saved = cache.get(key);
     if (saved) return saved;
     const probe = new Konva.Text({
       text: node.text,
-      width: natural ? undefined : node.width,
-      wrap: natural ? 'none' : 'word',
+      width:
+        natural || node.textSizing === 'auto-width' ? undefined : node.width,
+      wrap:
+        natural || node.textSizing === 'auto-width'
+          ? 'none'
+          : (node.textWrap ?? 'word'),
       fontFamily: fontStack(node.fontFamily),
       fontStyle: `${node.fontStyle === 'italic' ? 'italic ' : ''}${node.fontWeight ?? 400}`,
       fontSize: node.fontSize,

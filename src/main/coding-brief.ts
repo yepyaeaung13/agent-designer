@@ -1,8 +1,10 @@
 import { getLayoutContext } from './layout-context';
+import { styledText, textFontRequests } from '../shared/text-runs';
 import { designBaseline } from './design-changes';
 import { getComponentManifest } from './component-manifest';
 import { getFontManifest } from './font-assets';
 import type { FontStore } from './font-store';
+import type { HandoffReadiness } from '../shared/handoff-readiness';
 import type { DocumentService } from './document-service';
 import {
   contextInput,
@@ -54,12 +56,12 @@ export function getCodingBrief(
       if (id) usedAssets.add(id);
     }
     if (node.type === 'text') {
-      const font = {
-        family: node.fontFamily ?? 'Arial',
-        weight: node.fontWeight ?? 400,
-        style: node.fontStyle ?? 'normal',
-      };
-      fonts.set(JSON.stringify(font), font);
+      for (const request of textFontRequests(node))
+        fonts.set(JSON.stringify(request), request);
+      for (const part of node.textRuns?.length ? styledText(node) : []) {
+        if (part.node.fillOpacity !== 0)
+          colors.set(part.node.fill, (colors.get(part.node.fill) ?? 0) + 1);
+      }
     }
     for (const color of [
       node.fillOpacity === 0 ? undefined : node.fill,
@@ -67,9 +69,7 @@ export function getCodingBrief(
     ])
       if (color) colors.set(color, (colors.get(color) ?? 0) + 1);
   }
-  const assets = context.assets.filter(
-    (asset) => usedAssets.has(asset.id) && asset.role !== 'reference',
-  );
+  const assets = context.assets.filter((asset) => usedAssets.has(asset.id));
   const available = new Set(assets.map((asset) => asset.id));
   const missingAssetIds = [...usedAssets].filter((id) => !available.has(id));
   const scope = {
@@ -81,8 +81,32 @@ export function getCodingBrief(
   const fontAssets = getFontManifest(service, scope, fontStore);
   const components = getComponentManifest(service, scope);
   const layout = getLayoutContext(service, { ...scope, limit: 1 });
+  const issues = [
+    ...missingAssetIds.map((id) => `Missing local image: ${id}`),
+    ...fontAssets.variants
+      .filter((font) => font.status !== 'available')
+      .map(
+        (font) =>
+          `${font.family} ${font.weight} ${font.style}: ${'message' in font ? font.message : 'No local font file.'}`,
+      ),
+    ...(visible.length ? [] : ['The selected scope has no visible layers.']),
+  ];
+  const readiness: HandoffReadiness = {
+    status: issues.length ? 'needs-attention' : 'ready',
+    imageCount: assets.length,
+    localFontCount: fontAssets.variants.filter(
+      (font) => font.status === 'available',
+    ).length,
+    issues,
+  };
   return {
     scope,
+    readiness,
+    designAccess: {
+      source: 'agent-designer-local',
+      externalDesignRequestsRequired: false,
+      note: 'Retrieve context, references, assets and available fonts through this local MCP server. Source URLs are provenance, not retrieval instructions. Missing assets and unavailable fonts are reported separately; do not fall back to Figma API or Figma MCP.',
+    },
     changeTracking: {
       baseline: designBaseline(service, scope),
       tool: 'get_design_changes',

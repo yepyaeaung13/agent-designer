@@ -14,4 +14,6 @@ Limits: 2,000 layers, nesting depth 64, 80 complex layers, 80 source images, 12 
 
 No build step or dependency installation is needed for this plugin. Plugin behavior is tested against a simulated Figma API; installation and export should also be checked in your Figma desktop app.
 
+For later changes, export the same frame again and choose **Update from export** in its existing Agent Designer document. Review conflicts before applying. Existing source layer IDs are retained, local edits are preserved by default, and the update can be undone during the current app session. If the plugin cannot supply a file key, the app asks you to confirm that the new export came from the same Figma file.
+
 The app now normalizes child sizing, layout positioning, constraints and available min/max dimensions from the existing REST-shaped export. No format change is required. Existing app documents can recover missing details using the explicit undoable action; current edits are preserved.

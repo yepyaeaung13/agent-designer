@@ -64,6 +64,12 @@ figma.ui.onmessage = async (message) => {
     const exportedById = new Map(nodes.map((node) => [node.id, node]));
     function copyGrid(live) {
       const raw = exportedById.get(live.id);
+      if (
+        raw &&
+        live.type === 'TEXT' &&
+        typeof live.textAutoResize === 'string'
+      )
+        raw.textAutoResize = live.textAutoResize;
       if (raw && live.layoutMode === 'GRID') {
         raw.layoutMode = 'GRID';
         for (const field of ['gridColumnSizes', 'gridRowSizes'])

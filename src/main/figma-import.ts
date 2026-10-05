@@ -1,6 +1,7 @@
 import { importedLayoutItem, importedGrid } from './layout-item-import';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { textRunSchema, type TextRun } from '../shared/text-runs';
 import {
   makeNode,
   type DesignDocument,
@@ -37,6 +38,7 @@ export type FigmaNode = {
     textAlignHorizontal?: string;
   };
   characters?: string;
+  textAutoResize?: string;
   visible?: boolean;
   locked?: boolean;
   opacity?: number;
@@ -63,6 +65,13 @@ export type FigmaNode = {
     color?: { r: number; g: number; b: number; a?: number };
   }[];
   characterStyleOverrides?: number[];
+  styleOverrideTable?: Record<
+    string,
+    NonNullable<FigmaNode['style']> & {
+      fills?: Paint[];
+      textDecoration?: string;
+    }
+  >;
   [key: string]: unknown;
 };
 export type ImportAsset = {
@@ -235,6 +244,21 @@ export function normalizeFigma(
         ),
       ),
       text: raw.characters ?? '',
+      ...(raw.type === 'TEXT' &&
+      ['WIDTH_AND_HEIGHT', 'HEIGHT', 'NONE', 'TRUNCATE'].includes(
+        raw.textAutoResize ?? '',
+      )
+        ? {
+            textSizing: (raw.textAutoResize === 'WIDTH_AND_HEIGHT'
+              ? 'auto-width'
+              : raw.textAutoResize === 'HEIGHT'
+                ? 'auto-height'
+                : 'fixed') as DesignNode['textSizing'],
+            textWrap: (raw.textAutoResize === 'WIDTH_AND_HEIGHT'
+              ? 'none'
+              : 'word') as DesignNode['textWrap'],
+          }
+        : {}),
       fontSize: raw.style?.fontSize ?? 16,
       fontFamily: raw.style?.fontFamily,
       fontWeight: raw.style?.fontWeight,
@@ -307,6 +331,79 @@ export function normalizeFigma(
           }
         : undefined,
     };
+    if (type === 'text' && raw.characterStyleOverrides) {
+      const runs: TextRun[] = [];
+      let offset = 0;
+      for (const character of node.text) {
+        const start = offset;
+        offset += character.length;
+        const key = raw.characterStyleOverrides[start] ?? 0;
+        if (!key) continue;
+        const style = raw.styleOverrideTable?.[String(key)];
+        if (!style) {
+          warnings.add(`${raw.name}: a text style override is unavailable.`);
+          continue;
+        }
+        const fill = style.fills?.find(
+          (p) => p.visible !== false && p.type === 'SOLID',
+        );
+        const parsed = textRunSchema.safeParse({
+          start,
+          end: offset,
+          fontFamily: style.fontFamily,
+          fontSize: style.fontSize,
+          fontWeight: style.fontWeight,
+          fontStyle:
+            style.italic === undefined
+              ? undefined
+              : style.italic
+                ? 'italic'
+                : 'normal',
+          lineHeight:
+            style.lineHeightPx && style.lineHeightPx > 0
+              ? style.lineHeightPx
+              : undefined,
+          letterSpacing: style.letterSpacing,
+          ...(fill
+            ? {
+                fill: color(fill),
+                fillOpacity: (fill.opacity ?? 1) * (fill.color?.a ?? 1),
+              }
+            : {}),
+          decoration:
+            style.textDecoration === 'UNDERLINE'
+              ? 'underline'
+              : style.textDecoration === 'STRIKETHROUGH'
+                ? 'line-through'
+                : undefined,
+        });
+        if (!parsed.success) {
+          warnings.add(
+            `${raw.name}: an invalid text style override was skipped.`,
+          );
+          continue;
+        }
+        const last = runs[runs.length - 1];
+        const {
+          start: _ignoredStart,
+          end: _ignoredEnd,
+          ...properties
+        } = parsed.data;
+        const {
+          start: _previousStart,
+          end: _previousEnd,
+          ...previousProperties
+        } = last ?? {};
+        if (
+          last &&
+          last.end === start &&
+          JSON.stringify(properties) === JSON.stringify(previousProperties)
+        )
+          last.end = offset;
+        else runs.push(parsed.data);
+      }
+      if (runs.length) node.textRuns = runs;
+    }
     if (needsRender(raw)) {
       warnings.add(
         `${raw.name}: complex appearance is shown using a saved Figma export; source properties remain available to the agent.`,

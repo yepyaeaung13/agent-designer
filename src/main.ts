@@ -1,4 +1,5 @@
 import { FontStore } from './main/font-store';
+import { getCodingBrief } from './main/coding-brief';
 import { fontRequestSchema } from './shared/fonts';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, net } from 'electron';
 import path from 'node:path';
@@ -10,7 +11,13 @@ import type { ConnectionInfo } from './shared/design';
 import { FigmaImporter } from './main/figma-import';
 import { z } from 'zod';
 import { open, writeFile } from 'node:fs/promises';
-import { bundleLimit, importFigmaBundle } from './main/figma-bundle';
+import {
+  bundleLimit,
+  importFigmaBundle,
+  parseFigmaBundle,
+} from './main/figma-bundle';
+import { prepareExportUpdate } from './main/figma-sync';
+import { updateExportInput, applyExportInput } from './shared/figma-update';
 
 let service: DocumentService | undefined;
 let mcp: Awaited<ReturnType<typeof startMcp>> | undefined;
@@ -49,6 +56,7 @@ else {
         net.fetch(String(url), options),
       );
       let importing = false;
+      let pendingExport: ReturnType<typeof prepareExportUpdate> | undefined;
       let connection: ConnectionInfo;
       let previewBusy = false;
       service.setLayoutRecalculator(async (nodes, previous) => {
@@ -242,6 +250,10 @@ else {
             'Could not confirm the clipboard copy. Please try again.',
           );
       });
+      ipcMain.handle('design:handoff-readiness', (event, input: unknown) => {
+        trusted(event);
+        return getCodingBrief(service!, input, false, fonts).readiness;
+      });
       ipcMain.handle('design:import-figma', async (event, input: unknown) => {
         trusted(event);
         if (importing)
@@ -253,43 +265,115 @@ else {
           importing = false;
         }
       });
+      const pickBundle = async (event: Electron.IpcMainInvokeEvent) => {
+        const result = await dialog.showOpenDialog(
+          BrowserWindow.fromWebContents(event.sender)!,
+          {
+            title: 'Import Figma export',
+            properties: ['openFile'],
+            filters: [{ name: 'Agent Designer export', extensions: ['json'] }],
+          },
+        );
+        if (result.canceled || !result.filePaths[0]) return null;
+        const file = await open(result.filePaths[0], 'r');
+        try {
+          const stat = await file.stat();
+          if (!stat.isFile() || stat.size > bundleLimit)
+            throw new Error('Choose an export file smaller than 100 MB.');
+          const bytes = Buffer.alloc(stat.size + 1);
+          let size = 0;
+          while (size < bytes.length) {
+            const read = await file.read(
+              bytes,
+              size,
+              bytes.length - size,
+              null,
+            );
+            if (!read.bytesRead) break;
+            size += read.bytesRead;
+          }
+          if (size !== stat.size)
+            throw new Error(
+              'The export file changed while reading. Try again.',
+            );
+          return {
+            bytes: bytes.subarray(0, size),
+            name: path.basename(result.filePaths[0]),
+          };
+        } finally {
+          await file.close();
+        }
+      };
+      ipcMain.handle(
+        'design:review-export-update',
+        async (event, input: unknown) => {
+          trusted(event);
+          const request = updateExportInput.parse(input);
+          if (importing) throw new Error('An import is already in progress.');
+          importing = true;
+          pendingExport = undefined;
+          try {
+            const selected = await pickBundle(event);
+            if (!selected) return null;
+            const prepared = prepareExportUpdate(
+              service!,
+              request.documentId,
+              request.expectedRevision,
+              parseFigmaBundle(selected.bytes),
+              selected.name,
+            );
+            pendingExport = prepared;
+            return prepared.review;
+          } finally {
+            importing = false;
+          }
+        },
+      );
+      ipcMain.handle('design:discard-export-update', (event, id: unknown) => {
+        trusted(event);
+        const reviewId = z.string().uuid().parse(id);
+        if (pendingExport?.review.reviewId === reviewId)
+          pendingExport = undefined;
+      });
+      ipcMain.handle(
+        'design:apply-export-update',
+        async (event, input: unknown) => {
+          trusted(event);
+          const request = applyExportInput.parse(input);
+          if (importing) throw new Error('An import is already in progress.');
+          const prepared = pendingExport;
+          if (!prepared || prepared.review.reviewId !== request.reviewId)
+            throw new Error(
+              'This export review expired. Select the export again.',
+            );
+          importing = true;
+          try {
+            const resolved = prepared.resolve(
+              request.choices,
+              request.confirmUnverifiedSource,
+            );
+            const result = await service!.updateImportedDocument(
+              prepared.review.documentId,
+              prepared.review.expectedRevision,
+              resolved.document,
+              resolved.raw,
+              resolved.assets,
+            );
+            if (pendingExport === prepared) pendingExport = undefined;
+            return result;
+          } finally {
+            importing = false;
+          }
+        },
+      );
       ipcMain.handle('design:import-bundle', async (event) => {
         trusted(event);
         if (importing) throw new Error('An import is already in progress.');
         importing = true;
         try {
-          const result = await dialog.showOpenDialog(
-            BrowserWindow.fromWebContents(event.sender)!,
-            {
-              title: 'Import Figma export',
-              properties: ['openFile'],
-              filters: [
-                { name: 'Agent Designer export', extensions: ['json'] },
-              ],
-            },
-          );
-          if (result.canceled || !result.filePaths[0]) return null;
-          const file = await open(result.filePaths[0], 'r');
-          try {
-            const stat = await file.stat();
-            if (!stat.isFile() || stat.size > bundleLimit)
-              throw new Error('Choose an export file smaller than 100 MB.');
-            const bytes = Buffer.alloc(stat.size + 1);
-            let size = 0;
-            while (size < bytes.length) {
-              const read = await file.read(
-                bytes,
-                size,
-                bytes.length - size,
-                null,
-              );
-              if (!read.bytesRead) break;
-              size += read.bytesRead;
-            }
-            return importFigmaBundle(service!, bytes.subarray(0, size));
-          } finally {
-            await file.close();
-          }
+          const selected = await pickBundle(event);
+          if (!selected) return null;
+          return importFigmaBundle(service!, selected.bytes);
         } finally {
           importing = false;
         }

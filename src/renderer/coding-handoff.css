@@ -10,6 +10,21 @@
 }
 .coding-handoff-dialog {
   max-width: 560px;
+  max-height: 85vh;
+  overflow: auto;
+}
+.handoff-readiness {
+  padding: 12px 0;
+  border-block: 1px solid var(--line, #dedee5);
+}
+.handoff-readiness p {
+  margin: 8px 0;
+}
+.handoff-readiness ul {
+  max-height: 130px;
+  overflow: auto;
+  padding-left: 22px;
+  font-size: 12px;
 }
 .coding-handoff-dialog > p {
   margin: 14px 0;

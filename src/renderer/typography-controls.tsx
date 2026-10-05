@@ -1,4 +1,5 @@
 import type { DesignNode } from '../shared/design';
+import { TextRunControls } from './text-run-controls';
 
 export function TypographyControls({
   node,
@@ -25,6 +26,38 @@ export function TypographyControls({
         />
       </label>
       <div className="field-grid">
+        <label>
+          Text sizing
+          <select
+            value={node.textSizing ?? 'legacy'}
+            disabled={disabled}
+            onChange={(event) =>
+              update({
+                textSizing: event.target.value as DesignNode['textSizing'],
+              })
+            }
+          >
+            {!node.textSizing && <option value="legacy">Legacy sizing</option>}
+            <option value="auto-width">Auto width</option>
+            <option value="auto-height">Auto height</option>
+            <option value="fixed">Fixed box</option>
+          </select>
+        </label>
+        <label>
+          Text wrapping
+          <select
+            value={node.textWrap ?? 'legacy'}
+            disabled={disabled || node.textSizing === 'auto-width'}
+            onChange={(event) =>
+              update({ textWrap: event.target.value as DesignNode['textWrap'] })
+            }
+          >
+            {!node.textWrap && <option value="legacy">Legacy wrapping</option>}
+            <option value="none">No wrap</option>
+            <option value="word">Words</option>
+            <option value="char">Characters</option>
+          </select>
+        </label>
         {(
           [
             ['fontWeight', 'Font weight', node.fontWeight ?? 400, 1, 1000],
@@ -101,6 +134,12 @@ export function TypographyControls({
           </select>
         </label>
       </div>
+      <TextRunControls
+        key={node.id}
+        node={node}
+        disabled={disabled}
+        update={update}
+      />
       <p className="property-note">
         Font families must be installed on this device. Imported layout and
         original Figma properties are also available to your coding agent.

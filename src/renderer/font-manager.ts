@@ -1,6 +1,8 @@
 import type { DesignNode } from '../shared/design';
 import Konva from 'konva';
 import { textLayout } from './text-layout';
+import { textFontRequests } from '../shared/text-runs';
+import { richTextLayout } from './rich-text';
 import {
   fontCovers,
   type FontRequest,
@@ -45,13 +47,16 @@ export function textOverflow(nodes: DesignNode[]): TextOverflow[] {
       const text = new Konva.Text({
         text: node.text,
         ...textLayout(node),
+        height: undefined,
         fontSize: node.fontSize,
         fontFamily: fontStack(node.fontFamily),
         fontStyle: `${node.fontStyle === 'italic' ? 'italic ' : ''}${node.fontWeight ?? 400}`,
         lineHeight: node.lineHeight ? node.lineHeight / node.fontSize : 1,
         letterSpacing: node.letterSpacing ?? 0,
       });
-      const requiredHeight = text.height();
+      const requiredHeight = node.textRuns?.length
+        ? richTextLayout(node).height
+        : text.height();
       text.destroy();
       if (requiredHeight > node.height + 0.1)
         result.push({
@@ -66,12 +71,8 @@ export function requestedFonts(nodes: DesignNode[]) {
   const unique = new Map<string, FontRequest>();
   for (const node of nodes)
     if (node.type === 'text') {
-      const request: FontRequest = {
-        family: (node.fontFamily ?? 'Arial').trim(),
-        weight: node.fontWeight ?? 400,
-        style: node.fontStyle ?? 'normal',
-      };
-      unique.set(JSON.stringify(request), request);
+      for (const request of textFontRequests(node))
+        unique.set(JSON.stringify(request), request);
     }
   return [...unique.values()];
 }

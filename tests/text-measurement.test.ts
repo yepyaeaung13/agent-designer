@@ -3,6 +3,99 @@ import assert from 'node:assert/strict';
 import { DocumentService } from '../src/main/document-service';
 import { makeNode } from '../src/shared/design';
 import { recalculateAutoLayout } from '../src/shared/auto-layout';
+import { textLayout } from '../src/renderer/text-layout';
+import { normalizeFigma } from '../src/main/figma-import';
+
+test('explicit text sizing overrides legacy height inference and preserves wrapping', () => {
+  const node = { ...makeNode('text'), height: 12, text: 'A long label' };
+  assert.equal(textLayout(node).width, undefined);
+  assert.equal(
+    textLayout({ ...node, textSizing: 'auto-height' }).width,
+    node.width,
+  );
+  assert.equal(
+    textLayout({ ...node, textSizing: 'auto-height', textWrap: 'char' }).wrap,
+    'char',
+  );
+  assert.equal(textLayout({ ...node, textSizing: 'fixed' }).height, 12);
+  assert.equal(
+    textLayout({ ...node, textSizing: 'auto-width', textWrap: 'word' }).wrap,
+    'none',
+  );
+});
+
+test('Figma text sizing survives persistence and undo while missing metadata stays legacy', () => {
+  const service = new DocumentService(':memory:');
+  try {
+    for (const [sourceMode, mode] of [
+      ['WIDTH_AND_HEIGHT', 'auto-width'],
+      ['HEIGHT', 'auto-height'],
+      ['NONE', 'fixed'],
+      ['TRUNCATE', 'fixed'],
+      [undefined, undefined],
+    ] as const) {
+      const imported = normalizeFigma(
+        {
+          id: '1:1',
+          type: 'TEXT',
+          name: 'Label',
+          characters: 'Hello',
+          textAutoResize: sourceMode,
+          absoluteBoundingBox: { x: 0, y: 0, width: 120, height: 20 },
+        },
+        {
+          kind: 'figma',
+          url: '',
+          fileKey: '',
+          nodeId: '1:1',
+          version: '',
+          importedAt: new Date().toISOString(),
+          previewAssetId: 'a'.repeat(64),
+          importedRevision: 0,
+        },
+        {},
+      );
+      const text = imported.pages[0].nodes[0];
+      assert.equal(text.textSizing, mode);
+      const snapshot = service.read();
+      const request = {
+        documentId: snapshot.document.id,
+        pageId: snapshot.activePageId,
+        expectedRevision: snapshot.document.revision,
+      };
+      const created = service.execute({
+        ...request,
+        command: { type: 'create', node: text },
+      });
+      assert.equal(
+        created.document.pages[0].nodes.find((n) => n.id === text.id)
+          ?.textSizing,
+        mode,
+      );
+      const changed = service.execute({
+        ...request,
+        expectedRevision: created.document.revision,
+        command: {
+          type: 'update',
+          id: text.id,
+          patch: { textSizing: 'fixed', textWrap: 'char' },
+        },
+      });
+      const undone = service.execute({
+        ...request,
+        expectedRevision: changed.document.revision,
+        command: { type: 'undo' },
+      });
+      assert.equal(
+        undone.document.pages[0].nodes.find((n) => n.id === text.id)
+          ?.textSizing,
+        mode,
+      );
+    }
+  } finally {
+    service.close();
+  }
+});
 
 const layout = {
   enabled: true,

@@ -88,6 +88,24 @@ function fixture() {
     },
   };
 }
+test('unreadable local font files become handoff warnings instead of aborting the brief', () => {
+  const f = fixture();
+  try {
+    f.store.data = () => {
+      throw new Error('File missing');
+    };
+    const brief = getCodingBrief(f.service, f.scope, false, f.store);
+    assert.equal(brief.fontAssets.variants[0].status, 'invalid');
+    assert.equal(brief.readiness.status, 'needs-attention');
+    assert.equal(brief.readiness.localFontCount, 0);
+    assert.ok(
+      brief.readiness.issues.some((issue) => issue.includes('Used Font')),
+    );
+  } finally {
+    f.close();
+  }
+});
+
 test('font manifest scopes validated bytes to visible text with checksums and no paths', () => {
   const f = fixture();
   try {

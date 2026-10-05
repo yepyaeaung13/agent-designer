@@ -8,6 +8,7 @@ import {
 import type { DocumentService } from './document-service';
 import type { FontStore } from './font-store';
 import { fontCovers, type FontRequest } from '../shared/fonts';
+import { textFontRequests } from '../shared/text-runs';
 
 export const fontManifestInput = contextInput
   .omit({ offset: true, limit: true })
@@ -47,12 +48,8 @@ export function getFontManifest(
       current = current.parentId ? byId.get(current.parentId) : undefined;
     }
     if (!visible) continue;
-    const request = {
-      family: (node.fontFamily ?? 'Arial').trim(),
-      weight: node.fontWeight ?? 400,
-      style: node.fontStyle ?? 'normal',
-    };
-    requested.set(JSON.stringify(request), request);
+    for (const request of textFontRequests(node))
+      requested.set(JSON.stringify(request), request);
   }
   const library = store?.list() ?? [];
   const variants = [...requested.values()].map((request) => {
@@ -71,7 +68,17 @@ export function getFontManifest(
         status: 'invalid' as const,
         message: font.validationError,
       };
-    const bytes = Buffer.from(store!.data(font.id), 'base64');
+    let bytes: Buffer;
+    try {
+      bytes = Buffer.from(store!.data(font.id), 'base64');
+    } catch {
+      return {
+        ...request,
+        status: 'invalid' as const,
+        message:
+          'The local font file cannot be read. Reload it using Manage fonts.',
+      };
+    }
     return {
       ...request,
       status: 'available' as const,
